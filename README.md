@@ -85,3 +85,7 @@ El entorno se valida con Zod antes de crear la aplicación; `AppConfig` se inyec
 ## Eventos de dominio (contratos)
 
 `DomainEvent` + `DomainEventBuffer` para capturar hechos por agregado, con puertos opcionales `TransactionalEventOutboxPort` y `DomainEventPublisherPort`. Sin bus global, DB ni publicador `NoOp`. Ver [docs/DOMAIN_EVENTS.md](docs/DOMAIN_EVENTS.md).
+
+## Readiness opcional
+
+`/health` es liveness. `/health/ready` solo se habilita al registrar `ReadinessModule` con checks reales y timeout; devuelve 503 RFC 9457 ante fallos, timeouts o shutdown. No se instalan dependencias externas ni checks ficticios. Ver [docs/READINESS.md](docs/READINESS.md).

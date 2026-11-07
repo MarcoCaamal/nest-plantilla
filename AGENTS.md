@@ -36,6 +36,12 @@ Este repositorio es una plantilla **agnóstica a proveedores** de NestJS 12+, Ty
 - No registrar headers, bodies, tokens ni credenciales; logs de fallos técnicos con stack interno y respuestas RFC 9457 sanitizadas.
 - OpenTelemetry, exportadores, storage y auditoría persistente son adaptadores o módulos opcionales. No introducirlos por defecto.
 
+## Readiness y ciclo de vida
+- `GET /health` sigue siendo liveness puro. `GET /health/ready` se instala solo importando `ReadinessModule.register()` con uno o más checks críticos reales.
+- Los checks corren en paralelo con AbortSignal + timeout individual; `false`, excepción o timeout devuelven 503 RFC 9457 genérico, sin filtrar detalles internos.
+- Durante `BeforeApplicationShutdown` readiness pasa a `not_ready`; no volver a consultar dependencias mientras se apaga.
+- No incluir checks falsos "always ready", conexiones ficticias ni `@nestjs/terminus` por defecto.
+
 ## Configuración y ciclo de vida
 - Validar entorno mediante Zod 4 en bootstrap antes de crear NestJS. No leer variables crudas en casos de uso ni dominio.
 - Inyectar `AppConfig` inmutable mediante ConfigModule. Los proyectos extienden `baseEnvSchema` según sus necesidades.

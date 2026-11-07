@@ -142,3 +142,7 @@ ni políticas de negocio genéricas para recursos inexistentes.
 ## Eventos de dominio y Outbox
 
 `shared/domain/domain-event.ts` ofrece `DomainEvent` + `DomainEventBuffer`; `shared/application/ports` define los puertos opcionales `TransactionalEventOutboxPort` y `DomainEventPublisherPort`. Ningún bus ni proveedor se instala por defecto. El outbox real debe compartir el contexto transaccional del UoW. Ver [DOMAIN_EVENTS.md](DOMAIN_EVENTS.md).
+
+## Readiness opcional
+
+`shared/infrastructure/health` ofrece `ReadinessCheckPort`, `ReadinessService` y `ReadinessModule.register()`, con checks reales, timeouts individuales, cancelación cooperativa, 503 RFC 9457 y transición a `not_ready` durante shutdown. No es parte del `AppModule` por defecto. Ver [READINESS.md](READINESS.md).
