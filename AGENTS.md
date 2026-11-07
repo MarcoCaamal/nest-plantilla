@@ -21,7 +21,8 @@ Este repositorio es una plantilla **agnóstica a proveedores** de NestJS 12+, Ty
 - Repositorios reciben/devuelven agregados; mappers estáticos entre dominio y ORM.
 - IDs y timestamps de negocio nacen en factories de entidades, no desde INSERT; timestamps ORM son técnicos.
 - DomainService solo para lógica síncrona pura que requiere 2+ entidades; AppService solo si 2+ casos de uso comparten I/O.
-- Auth: Principal inmutable; Gates HTTP; ResourcePolicy en dominio; listados restringidos por AccessScope + filtros AND (anti-IDOR).
+- AuthN: guard humano Bearer y guard M2M API Key, en módulos separados. Ambos verifican por puertos y producen Principal inmutable; usar guard AuthN ANTES de GateGuard. Sin adaptadores preinstalados.
+- AuthZ: Principal inmutable; Gates HTTP; ResourcePolicy en dominio; listados restringidos por AccessScope + filtros AND (anti-IDOR).
 
 ## Validación y adaptadores
 - Zod 4 + Standard Schema nativo de Nest 12; schema en `infrastructure/http/<audiencia>/schemas`; nunca Zod en domain/application.
