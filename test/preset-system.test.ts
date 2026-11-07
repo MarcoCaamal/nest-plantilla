@@ -6,8 +6,6 @@ import { parseEnv, EnvironmentValidationError } from '@/shared/infrastructure/co
 import { presetEnvSchema } from '@/shared/infrastructure/config/env.schema';
 import { scopedPrismaWhere } from '@/shared/infrastructure/persistence/scoped-prisma-where';
 import { AccessScope } from '@/shared/domain/auth/access-scope';
-import { InMemoryRateLimiterAdapter } from '@/shared/infrastructure/security/in-memory-rate-limiter.adapter';
-import { ClockPort } from '@/shared/application/ports/clock.port';
 
 describe('opinionated system adapters', () => {
   it('generates time-ordered RFC 9562 UUID v7 IDs', () => {
@@ -59,16 +57,4 @@ describe('opinionated system adapters', () => {
     expect(scopedPrismaWhere(AccessScope.unrestricted(), { id: 'one' })).toEqual({ id: 'one' });
   });
 
-  it('rate limits with a clock port, resetting the window', () => {
-    let now = 10_000;
-    class Clock extends ClockPort { now(): Date { return new Date(now); } }
-    const limiter = new InMemoryRateLimiterAdapter(new Clock());
-    expect(limiter.consume('one', { limit: 2, windowSeconds: 60 })).toBeNull();
-    expect(limiter.consume('one', { limit: 2, windowSeconds: 60 })).toBeNull();
-    expect(limiter.consume('one', { limit: 2, windowSeconds: 60 })).toEqual({
-      type: 'RATE_LIMITED', retryAfterSeconds: 60,
-    });
-    now += 60000;
-    expect(limiter.consume('one', { limit: 2, windowSeconds: 60 })).toBeNull();
-  });
 });

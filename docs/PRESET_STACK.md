@@ -47,7 +47,7 @@ Environment is validated with Zod 4 **before** Nest initialization. Invalid vari
 | ApiKeyVerifierPort | SHA-256 API key lookup, timingSafeEqual |
 | MailSenderPort | Resend HTTP with Idempotency-Key, or Mailpit SMTP |
 | TransactionalEventOutboxPort | PrismaTransactionalOutboxAdapter |
-| RateLimiterPort | InMemoryRateLimiterAdapter |
+| HTTP rate limiting | `@nestjs/throttler`: `ThrottlerModule` + `AuthThrottlerGuard` + `@Throttle()` |
 
 Domain and application code do not import Nest, Prisma, Zod, JWT, Argon2, Pino, OpenTelemetry or Resend.
 
@@ -80,7 +80,7 @@ Outbox payloads holding short-lived reset/verification links are sensitive data.
 
 ## Rate limiting and Idempotency
 
-AuthRateLimitGuard restricts login to five/minute, refresh to fifteen/minute, and forgot-password to three/minute per IP/route. Errors use 429 RFC 9457 with Retry-After. The default rate limiter is **per process**; replace through its port when running multiple replicas.
+`@nestjs/throttler` 6.7 limits login to five/minute, refresh to fifteen/minute, and forgot-password to three/minute per IP and route (`@Throttle`, in milliseconds). The custom `AuthThrottlerGuard` only maps the library response to **429 RFC 9457** with `Retry-After`. Limiting is opt-in on sensitive endpoints; no global `APP_GUARD` is registered. `blockDuration: 0` permits requests once their oldest hit expires, without extending the block on repeated failures. The default in-memory `ThrottlerStorage` is **per process**: configure a distributed storage adapter (e.g. Redis-compatible) on `ThrottlerModule` before deploying multiple replicas. Behind a trusted reverse proxy, configure Express `trust proxy` carefully so rate limiting uses the real client IP; never accept untrusted `X-Forwarded-For` headers.
 
 An optional IdempotencyInterceptor currently protects registration. Supply Idempotency-Key of 8-128 safe characters; records are unique per actor/method/path/key. Request hashes are checked for equality, in-flight duplicates return 409, and completed responses replay. Schedule cleanup of expired IdempotencyRecord rows.
 
@@ -107,4 +107,4 @@ DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5433/nest_plantilla_test p
 TEST_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5433/nest_plantilla_test pnpm test
 ~~~
 
-test/preset-system.test.ts covers UUID v7, Argon2id, env, scope AND and rate limit. test/preset-integration.test.ts runs only with TEST_DATABASE_URL and verifies transaction commit/rollback, registration -> outbox -> email -> verification -> login -> JWT -> refresh -> family revocation on reuse, plus scoped pagination. Run integration tests only against a disposable dedicated test database; never against production.
+test/preset-system.test.ts covers UUID v7, Argon2id, env and scope AND; test/preset-throttler-http.test.ts verifies `@nestjs/throttler` in HTTP with RFC 9457 and Retry-After. test/preset-integration.test.ts runs only with TEST_DATABASE_URL and verifies transaction commit/rollback, registration -> outbox -> email -> verification -> login -> JWT -> refresh -> family revocation on reuse, plus scoped pagination. Run integration tests only against a disposable dedicated test database; never against production.

@@ -1,17 +1,15 @@
 import { Global, Module } from '@nestjs/common';
-import { RateLimiterPort } from '@/shared/application/ports/rate-limiter.port';
-import { InMemoryRateLimiterAdapter } from './in-memory-rate-limiter.adapter';
-import { AuthRateLimitGuard } from './auth-rate-limit.guard';
+import { ThrottlerModule, seconds } from '@nestjs/throttler';
+import { AuthThrottlerGuard } from './auth-throttler.guard';
 import { IdempotencyInterceptor } from '@/shared/infrastructure/http/interceptors/idempotency.interceptor';
 
+/** ThrottlerGuard is opt-in per endpoint; public endpoints are not globally limited. */
 @Global()
 @Module({
-  providers: [
-    InMemoryRateLimiterAdapter,
-    { provide: RateLimiterPort, useExisting: InMemoryRateLimiterAdapter },
-    AuthRateLimitGuard,
-    IdempotencyInterceptor,
+  imports: [
+    ThrottlerModule.forRoot([{ limit: 5, ttl: seconds(60), blockDuration: 0 }]),
   ],
-  exports: [RateLimiterPort, AuthRateLimitGuard, IdempotencyInterceptor],
+  providers: [AuthThrottlerGuard, IdempotencyInterceptor],
+  exports: [AuthThrottlerGuard, IdempotencyInterceptor],
 })
 export class PresetSecurityModule {}

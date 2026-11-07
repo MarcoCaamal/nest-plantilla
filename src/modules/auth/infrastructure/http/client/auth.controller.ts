@@ -11,7 +11,8 @@ import {
   RegisterDto, LoginDto, RefreshDto, ForgotPasswordDto, ResetPasswordDto, VerifyEmailDto,
 } from './schemas/auth.schema';
 import { AuthFlowErrorMapper } from './auth-error.mapper';
-import { AuthRateLimitGuard } from '@/shared/infrastructure/security/auth-rate-limit.guard';
+import { Throttle, seconds } from '@nestjs/throttler';
+import { AuthThrottlerGuard } from '@/shared/infrastructure/security/auth-throttler.guard';
 import { IdempotencyInterceptor } from '@/shared/infrastructure/http/interceptors/idempotency.interceptor';
 import { UseInterceptors } from '@nestjs/common';
 
@@ -35,15 +36,17 @@ export class AuthController {
   }
 
   @Post('login')
+  @Throttle({ default: { limit: 5, ttl: seconds(60) } })
   @HttpCode(200)
-  @UseGuards(AuthRateLimitGuard)
+  @UseGuards(AuthThrottlerGuard)
   async login(@Body({ schema: LoginDto.schema }) dto: typeof LoginDto.schema._output, @Req() request: DeviceRequest) {
     return HttpResult.from(await this.flows.login(dto, device(request)), AuthFlowErrorMapper.toProblemDetails);
   }
 
   @Post('refresh')
+  @Throttle({ default: { limit: 15, ttl: seconds(60) } })
   @HttpCode(200)
-  @UseGuards(AuthRateLimitGuard)
+  @UseGuards(AuthThrottlerGuard)
   async refresh(@Body({ schema: RefreshDto.schema }) dto: typeof RefreshDto.schema._output, @Req() request: DeviceRequest) {
     return HttpResult.from(await this.flows.refresh(dto.refreshToken, device(request)), AuthFlowErrorMapper.toProblemDetails);
   }
@@ -55,8 +58,9 @@ export class AuthController {
   }
 
   @Post('forgot-password')
+  @Throttle({ default: { limit: 3, ttl: seconds(60) } })
   @HttpCode(200)
-  @UseGuards(AuthRateLimitGuard)
+  @UseGuards(AuthThrottlerGuard)
   async forgot(@Body({ schema: ForgotPasswordDto.schema }) dto: typeof ForgotPasswordDto.schema._output) {
     return HttpResult.from(await this.flows.forgotPassword(dto.email), AuthFlowErrorMapper.toProblemDetails);
   }
