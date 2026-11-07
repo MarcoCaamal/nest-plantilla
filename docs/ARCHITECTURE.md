@@ -126,3 +126,7 @@ una entidad de otro tenant sin autorización.
 **Sin proveedores instalados:** no hay roles predefinidos, acceso por wildcard,
 `JwtService`, servicios de permisos externos, base de datos, usuarios simulados
 ni políticas de negocio genéricas para recursos inexistentes.
+
+## Observabilidad
+
+`shared/infrastructure/observability/` ofrece logger JSON de Nest, correlación por AsyncLocalStorage y un middleware de logging HTTP registrado por `ObservabilityModule`. No agrega infraestructura externa, SDKs ni dependencias en dominio/aplicación. Ver [OBSERVABILITY.md](OBSERVABILITY.md).

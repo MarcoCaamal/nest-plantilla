@@ -8,9 +8,10 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { GlobalExceptionFilter } from './shared/infrastructure/http/filters/global-exception.filter';
 import { HttpResultInterceptor } from './shared/infrastructure/http/interceptors/http-result.interceptor';
+import { jsonLogger } from './shared/infrastructure/observability/logging/json-logger';
 
 export async function bootstrap(): Promise<INestApplication> {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { logger: jsonLogger });
   app.useGlobalPipes(new StandardSchemaValidationPipe());
   app.useGlobalFilters(new GlobalExceptionFilter());
   app.useGlobalInterceptors(new HttpResultInterceptor());
@@ -29,7 +30,14 @@ export async function bootstrap(): Promise<INestApplication> {
 if (require.main === module) {
   // Bootstrap errors are technical panics. No business Result here.
   void bootstrap().catch((error: unknown) => {
-    console.error(error);
+    jsonLogger.error({
+      event: 'bootstrap.failed',
+      error: error instanceof Error ? {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+      } : { name: 'UnknownError' },
+    });
     process.exitCode = 1;
   });
 }

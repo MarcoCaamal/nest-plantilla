@@ -1,5 +1,6 @@
 import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import { AuthenticationHttpException } from '@/shared/infrastructure/http/authentication-http.exception';
+import { requestContext } from '@/shared/infrastructure/observability/context/request-context';
 import {
   readBearerCredential,
   type AuthenticatedHttpRequest,
@@ -33,6 +34,7 @@ export class UserAuthenticationGuard implements CanActivate {
     }
 
     request.principal = result.value;
+    requestContext.setActor(result.value);
     return true;
   }
 }

@@ -26,10 +26,15 @@ export class GlobalExceptionFilter implements ExceptionFilter {
 
     if (status >= 500) {
       // Never expose infrastructure stack traces or internal messages to callers.
-      this.logger.error(
-        exception instanceof Error ? exception.message : 'Unexpected technical error',
-        exception instanceof Error ? exception.stack : undefined,
-      );
+      this.logger.error({
+        event: 'http.unhandled_exception',
+        statusCode: status,
+        error: exception instanceof Error ? {
+          name: exception.name,
+          message: exception.message,
+          stack: exception.stack,
+        } : { name: 'UnknownError' },
+      });
     }
 
     const problem: ProblemDetails = getExplicitProblem(exception, status) ?? {
