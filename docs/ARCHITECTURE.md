@@ -138,3 +138,7 @@ ni políticas de negocio genéricas para recursos inexistentes.
 ## Configuración y adaptadores del sistema
 
 `shared/infrastructure/config` valida variables con Zod 4 antes de iniciar Nest y publica `AppConfig` como dependencia inmutable. `shared/application/ports` incluye `ClockPort`/`IdGeneratorPort` y `shared/infrastructure/system` sus implementaciones por defecto, no registradas automáticamente. Ver [CONFIGURATION.md](CONFIGURATION.md).
+
+## Readiness opcional
+
+`shared/infrastructure/health` ofrece `ReadinessCheckPort`, `ReadinessService` y `ReadinessModule.register()`, con checks reales, timeouts individuales, cancelación cooperativa, 503 RFC 9457 y transición a `not_ready` durante shutdown. No es parte del `AppModule` por defecto. Ver [READINESS.md](READINESS.md).
