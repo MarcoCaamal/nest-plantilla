@@ -138,3 +138,7 @@ ni políticas de negocio genéricas para recursos inexistentes.
 ## Configuración y adaptadores del sistema
 
 `shared/infrastructure/config` valida variables con Zod 4 antes de iniciar Nest y publica `AppConfig` como dependencia inmutable. `shared/application/ports` incluye `ClockPort`/`IdGeneratorPort` y `shared/infrastructure/system` sus implementaciones por defecto, no registradas automáticamente. Ver [CONFIGURATION.md](CONFIGURATION.md).
+
+## Eventos de dominio y Outbox
+
+`shared/domain/domain-event.ts` ofrece `DomainEvent` + `DomainEventBuffer`; `shared/application/ports` define los puertos opcionales `TransactionalEventOutboxPort` y `DomainEventPublisherPort`. Ningún bus ni proveedor se instala por defecto. El outbox real debe compartir el contexto transaccional del UoW. Ver [DOMAIN_EVENTS.md](DOMAIN_EVENTS.md).
