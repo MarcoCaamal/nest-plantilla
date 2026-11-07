@@ -1,5 +1,5 @@
 /** Trusted authentication adapters produce this provider-independent identity. */
-export type PrincipalType = 'HUMAN' | 'MACHINE';
+export type PrincipalType = 'USER' | 'MACHINE';
 
 export type DeepReadonly<T> =
   T extends (...args: never[]) => unknown ? T
@@ -15,8 +15,8 @@ export interface Principal<TAttributes extends object = Record<string, unknown>>
   readonly attributes: DeepReadonly<TAttributes>;
 }
 
-export type HumanPrincipal<TAttributes extends object = Record<string, unknown>> =
-  Principal<TAttributes> & { readonly type: 'HUMAN' };
+export type UserPrincipal<TAttributes extends object = Record<string, unknown>> =
+  Principal<TAttributes> & { readonly type: 'USER' };
 
 export type MachinePrincipal<TAttributes extends object = Record<string, unknown>> =
   Principal<TAttributes> & { readonly type: 'MACHINE' };

@@ -75,7 +75,7 @@ El pipe global valida entrada; `@nestjs/swagger` usa `~standard.jsonSchema` de Z
 
 ## Autenticación (AuthN)
 
-`modules/auth` posee la identidad humana y `modules/api-clients` posee la autenticación Machine-to-Machine. Los puertos son agnósticos y cada módulo se registra solo al aportar explícitamente un verificador de infraestructura. No se autoconfigura JWT, sesiones ni API Keys. Los guards producen un `Principal` confiable y siempre se ejecutan antes de Gates. Ver [AUTHENTICATION.md](AUTHENTICATION.md).
+`modules/auth` posee la identidad de usuarios y `modules/api-clients` posee la autenticación Machine-to-Machine. Los puertos son agnósticos y cada módulo se registra solo al aportar explícitamente un verificador de infraestructura. No se autoconfigura JWT, sesiones ni API Keys. Los guards producen un `Principal` confiable y siempre se ejecutan antes de Gates. Ver [AUTHENTICATION.md](AUTHENTICATION.md).
 
 ## Autorización por niveles
 

@@ -1,17 +1,17 @@
 import { Module, type DynamicModule, type ModuleMetadata, type Provider } from '@nestjs/common';
-import { HumanCredentialVerifierPort } from './application/ports/human-credential-verifier.port';
-import { AuthenticateHumanUseCase } from './application/use-cases/authenticate-human.use-case';
-import { HumanAuthenticationGuard } from './infrastructure/http/guards/human-authentication.guard';
+import { UserCredentialVerifierPort } from './application/ports/user-credential-verifier.port';
+import { AuthenticateUserUseCase } from './application/use-cases/authenticate-user.use-case';
+import { UserAuthenticationGuard } from './infrastructure/http/guards/user-authentication.guard';
 
 /**
  * This module has no default verifier. Register an explicit adapter in each
- * project: AuthModule.register({ verifier: { provide: HumanCredentialVerifierPort, useClass: MyVerifier } }).
+ * project: AuthModule.register({ verifier: { provide: UserCredentialVerifierPort, useClass: MyVerifier } }).
  * Do NOT import this module into AppModule without a real verifier.
  */
 @Module({})
 export class AuthModule {
   static register(options: {
-    readonly verifier: Provider<HumanCredentialVerifierPort>;
+    readonly verifier: Provider<UserCredentialVerifierPort>;
     readonly imports?: ModuleMetadata['imports'];
   }): DynamicModule {
     return {
@@ -20,13 +20,13 @@ export class AuthModule {
       providers: [
         options.verifier,
         {
-          provide: AuthenticateHumanUseCase,
-          useFactory: (verifier: HumanCredentialVerifierPort) => new AuthenticateHumanUseCase(verifier),
-          inject: [HumanCredentialVerifierPort],
+          provide: AuthenticateUserUseCase,
+          useFactory: (verifier: UserCredentialVerifierPort) => new AuthenticateUserUseCase(verifier),
+          inject: [UserCredentialVerifierPort],
         },
-        HumanAuthenticationGuard,
+        UserAuthenticationGuard,
       ],
-      exports: [AuthenticateHumanUseCase, HumanAuthenticationGuard],
+      exports: [AuthenticateUserUseCase, UserAuthenticationGuard],
     };
   }
 }

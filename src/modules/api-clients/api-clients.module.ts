@@ -3,7 +3,7 @@ import { ApiKeyVerifierPort } from './application/ports/api-key-verifier.port';
 import { AuthenticateApiClientUseCase } from './application/use-cases/authenticate-api-client.use-case';
 import { ApiKeyAuthenticationGuard } from './infrastructure/http/guards/api-key-authentication.guard';
 
-/** Application-client IAM is independent of human authentication. */
+/** Application-client IAM is independent of user authentication. */
 @Module({})
 export class ApiClientsModule {
   static register(options: {

@@ -1,19 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { Result, type Result as ResultType } from '@/shared/core/result';
 import type { AuthenticationError } from '@/shared/domain/auth/authentication-error';
-import { snapshotPrincipal, type HumanPrincipal, type MachinePrincipal } from '@/shared/domain/auth/principal';
+import { snapshotPrincipal, type UserPrincipal, type MachinePrincipal } from '@/shared/domain/auth/principal';
 import { AuthenticationErrorMapper } from '@/shared/infrastructure/http/authentication-error.mapper';
 import {
   readApiKeyCredential,
   readBearerCredential,
 } from '@/shared/infrastructure/http/credentials/credential-reader';
-import { HumanCredentialVerifierPort } from '@/modules/auth/public';
-import { AuthenticateHumanUseCase } from '@/modules/auth/public';
+import { UserCredentialVerifierPort } from '@/modules/auth/public';
+import { AuthenticateUserUseCase } from '@/modules/auth/public';
 import { ApiKeyVerifierPort, AuthenticateApiClientUseCase } from '@/modules/api-clients/public';
 
-const human: HumanPrincipal = {
+const user: UserPrincipal = {
   id: 'user-01',
-  type: 'HUMAN',
+  type: 'USER',
   roles: ['staff'],
   permissions: ['orders:read'],
   attributes: { tenantId: 'tenant-01' },
@@ -26,11 +26,11 @@ const machine: MachinePrincipal = {
   attributes: { tenantId: 'tenant-01' },
 };
 
-class HumanVerifier extends HumanCredentialVerifierPort {
-  async verify(credential: string): Promise<ResultType<HumanPrincipal, AuthenticationError>> {
+class UserVerifier extends UserCredentialVerifierPort {
+  async verify(credential: string): Promise<ResultType<UserPrincipal, AuthenticationError>> {
     if (credential === 'expired') return Result.err({ type: 'CREDENTIALS_EXPIRED' });
     return credential === 'valid'
-      ? Result.ok(human)
+      ? Result.ok(user)
       : Result.err({ type: 'CREDENTIALS_INVALID' });
   }
 }
@@ -74,37 +74,37 @@ describe('credential extraction (protocol boundary)', () => {
 });
 
 describe('authentication use cases', () => {
-  it('authenticates human and machine separately, and freezes principals', async () => {
-    const humanResult = await new AuthenticateHumanUseCase(new HumanVerifier()).execute({ credential: 'valid' });
+  it('authenticates user and machine separately, and freezes principals', async () => {
+    const userResult = await new AuthenticateUserUseCase(new UserVerifier()).execute({ credential: 'valid' });
     const machineResult = await new AuthenticateApiClientUseCase(new MachineVerifier()).execute({ apiKey: 'key-valid' });
-    expect(humanResult.ok).toBe(true);
+    expect(userResult.ok).toBe(true);
     expect(machineResult.ok).toBe(true);
-    if (humanResult.ok && machineResult.ok) {
-      expect(humanResult.value.type).toBe('HUMAN');
+    if (userResult.ok && machineResult.ok) {
+      expect(userResult.value.type).toBe('USER');
       expect(machineResult.value.type).toBe('MACHINE');
-      expect(Object.isFrozen(humanResult.value)).toBe(true);
-      expect(Object.isFrozen(humanResult.value.roles)).toBe(true);
-      expect(Object.isFrozen(humanResult.value.permissions)).toBe(true);
-      expect(Object.isFrozen(humanResult.value.attributes)).toBe(true);
+      expect(Object.isFrozen(userResult.value)).toBe(true);
+      expect(Object.isFrozen(userResult.value.roles)).toBe(true);
+      expect(Object.isFrozen(userResult.value.permissions)).toBe(true);
+      expect(Object.isFrozen(userResult.value.attributes)).toBe(true);
       expect(Object.isFrozen(machineResult.value)).toBe(true);
     }
   });
 
   it('propagates the original expected error, not an exception', async () => {
-    expect(await new AuthenticateHumanUseCase(new HumanVerifier()).execute({ credential: 'expired' }))
+    expect(await new AuthenticateUserUseCase(new UserVerifier()).execute({ credential: 'expired' }))
       .toEqual(Result.err({ type: 'CREDENTIALS_EXPIRED' }));
     expect(await new AuthenticateApiClientUseCase(new MachineVerifier()).execute({ apiKey: 'wrong' }))
       .toEqual(Result.err({ type: 'CREDENTIALS_INVALID' }));
   });
 
   it('rejects a dishonest adapter returning the wrong actor type', async () => {
-    const dishonestHuman = {
-      verify: async () => Result.ok(machine as unknown as HumanPrincipal),
-    } satisfies HumanCredentialVerifierPort;
+    const dishonestUser = {
+      verify: async () => Result.ok(machine as unknown as UserPrincipal),
+    } satisfies UserCredentialVerifierPort;
     const dishonestMachine = {
-      verify: async () => Result.ok(human as unknown as MachinePrincipal),
+      verify: async () => Result.ok(user as unknown as MachinePrincipal),
     } satisfies ApiKeyVerifierPort;
-    expect(await new AuthenticateHumanUseCase(dishonestHuman).execute({ credential: 'x' }))
+    expect(await new AuthenticateUserUseCase(dishonestUser).execute({ credential: 'x' }))
       .toEqual(Result.err({ type: 'CREDENTIALS_INVALID' }));
     expect(await new AuthenticateApiClientUseCase(dishonestMachine).execute({ apiKey: 'x' }))
       .toEqual(Result.err({ type: 'CREDENTIALS_INVALID' }));
@@ -112,16 +112,16 @@ describe('authentication use cases', () => {
 
   it('does not swallow technical failures as Result.err', async () => {
     const panic = new Error('repository connection unavailable');
-    const failing = { verify: async (): Promise<never> => Promise.reject(panic) } satisfies HumanCredentialVerifierPort;
-    await expect(new AuthenticateHumanUseCase(failing).execute({ credential: 'x' })).rejects.toBe(panic);
+    const failing = { verify: async (): Promise<never> => Promise.reject(panic) } satisfies UserCredentialVerifierPort;
+    await expect(new AuthenticateUserUseCase(failing).execute({ credential: 'x' })).rejects.toBe(panic);
   });
 });
 
 describe('immutable principal snapshots', () => {
   it('deep copies nested authorization attributes without mutating verifier claims', () => {
     const input = {
-      id: 'human-test',
-      type: 'HUMAN' as const,
+      id: 'user-test',
+      type: 'USER' as const,
       roles: ['staff'],
       permissions: ['orders:read'],
       attributes: { tenantIds: ['tenant-01'], details: { flags: ['one'] } },

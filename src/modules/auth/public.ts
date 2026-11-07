@@ -1,5 +1,5 @@
 /** Exported entry point for other feature modules and composition roots. */
 export { AuthModule } from './auth.module';
-export { HumanCredentialVerifierPort } from './application/ports/human-credential-verifier.port';
-export { AuthenticateHumanUseCase, type AuthenticateHumanInput } from './application/use-cases/authenticate-human.use-case';
-export { HumanAuthenticationGuard } from './infrastructure/http/guards/human-authentication.guard';
+export { UserCredentialVerifierPort } from './application/ports/user-credential-verifier.port';
+export { AuthenticateUserUseCase, type AuthenticateUserInput } from './application/use-cases/authenticate-user.use-case';
+export { UserAuthenticationGuard } from './infrastructure/http/guards/user-authentication.guard';

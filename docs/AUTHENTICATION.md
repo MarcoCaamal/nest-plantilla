@@ -8,10 +8,10 @@ gestor de sesiones, JWT, Redis o servicio externo. `AppModule` puede arrancar si
 
 | Audiencia | Entrada HTTP | Caso de uso | Puerto del verificador |
 | --- | --- | --- | --- |
-| Humana (app/ops) | `Authorization: Bearer <credential>` | `AuthenticateHumanUseCase` | `HumanCredentialVerifierPort` |
+| Usuario (app/ops) | `Authorization: Bearer <credential>` | `AuthenticateUserUseCase` | `UserCredentialVerifierPort` |
 | M2M (B2B) | `X-API-Key: <credential>` | `AuthenticateApiClientUseCase` | `ApiKeyVerifierPort` |
 
-Ambos casos de uso retornan `Result<Principal, AuthenticationError>` (HUMAN o MACHINE).
+Ambos casos de uso retornan `Result<Principal, AuthenticationError>` (USER o MACHINE).
 Sus atributos son claims **planos/JSON-like ya validados y autorizados por el verificador**.
 La aplicación crea un snapshot inmutable antes de exponerlo a políticas y Gates.
 Los IDs, roles y permisos **nunca se construyen desde el cuerpo, query o header
@@ -29,7 +29,7 @@ repositorio. No impongas un método de verificación dentro del Caso de Uso.
   imports: [
     AuthzModule,
     AuthModule.register({
-      verifier: { provide: HumanCredentialVerifierPort, useClass: JwtVerifierAdapter },
+      verifier: { provide: UserCredentialVerifierPort, useClass: JwtVerifierAdapter },
       // imports: [SecretsModule, SessionModule], // solo si tu adaptador los necesita
     }),
   ],
@@ -38,19 +38,19 @@ repositorio. No impongas un método de verificación dentro del Caso de Uso.
 export class OrdersModule {}
 ```
 
-El puerto `HumanCredentialVerifierPort.verify(credential)` debe devolver un
-`HumanPrincipal` auténtico; para máquina, `ApiKeyVerifierPort.verify(apiKey)`
+El puerto `UserCredentialVerifierPort.verify(credential)` debe devolver un
+`UserPrincipal` auténtico; para máquina, `ApiKeyVerifierPort.verify(apiKey)`
 devuelve `MachinePrincipal`. Las clases de guard son exportadas por los
 módulos dinámicos, pero **no se registran globalmente** ni se inyectan
 verificadores falsos en producción.
 
 ```typescript
 @Controller('ops/orders')
-@UseGuards(HumanAuthenticationGuard, GateGuard) // orden obligatorio
+@UseGuards(UserAuthenticationGuard, GateGuard) // orden obligatorio
 export class StaffOrdersController {
   @Get()
   @Authorize('orders:read')
-  list(@CurrentPrincipal() principal: HumanPrincipal) { /* ... */ }
+  list(@CurrentPrincipal() principal: UserPrincipal) { /* ... */ }
 }
 
 @Controller('b2b/orders')
@@ -81,7 +81,7 @@ las rutas protegidas queden operativas en `AppModule` sin configurar un verifica
 
 ## Responsabilidades de un verificador de producción
 
-El verificador humano debe comprobar autenticidad de la credencial, firma o
+El verificador de usuarios debe comprobar autenticidad de la credencial, firma o
 prueba criptográfica, expiración, emisor/audiencia, integridad, revocación si
 corresponde y estado de identidad. Debe recuperar o validar de forma autoritativa
 los permisos y tenant IDs; no confiar en claims o roles arbitrarios del cliente.

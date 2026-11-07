@@ -10,11 +10,11 @@ import { NestFactory } from '@nestjs/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Result, type Result as ResultType } from '@/shared/core/result';
 import type { AuthenticationError } from '@/shared/domain/auth/authentication-error';
-import type { HumanPrincipal, MachinePrincipal, Principal } from '@/shared/domain/auth/principal';
+import type { UserPrincipal, MachinePrincipal, Principal } from '@/shared/domain/auth/principal';
 import {
   AuthModule,
-  HumanAuthenticationGuard,
-  HumanCredentialVerifierPort,
+  UserAuthenticationGuard,
+  UserCredentialVerifierPort,
 } from '@/modules/auth/public';
 import {
   ApiClientsModule,
@@ -27,9 +27,9 @@ import { CurrentPrincipal } from '@/shared/infrastructure/http/decorators/curren
 import { GlobalExceptionFilter } from '@/shared/infrastructure/http/filters/global-exception.filter';
 import { GateGuard } from '@/shared/infrastructure/http/guards/gate.guard';
 
-const human: HumanPrincipal = {
-  id: 'human-test',
-  type: 'HUMAN',
+const user: UserPrincipal = {
+  id: 'user-test',
+  type: 'USER',
   roles: ['staff'],
   permissions: ['records:read'],
   attributes: { tenantId: 'tenant-test' },
@@ -42,13 +42,13 @@ const machine: MachinePrincipal = {
   attributes: { tenantId: 'tenant-test' },
 };
 
-class TestHumanVerifier extends HumanCredentialVerifierPort {
-  async verify(token: string): Promise<ResultType<HumanPrincipal, AuthenticationError>> {
+class TestUserVerifier extends UserCredentialVerifierPort {
+  async verify(token: string): Promise<ResultType<UserPrincipal, AuthenticationError>> {
     if (token === 'panic') throw new Error('private technical failure');
     if (token === 'expired') return Result.err({ type: 'CREDENTIALS_EXPIRED' });
     if (token === 'suspended') return Result.err({ type: 'IDENTITY_INACTIVE' });
-    if (token === 'denied') return Result.ok({ ...human, permissions: [] });
-    return token === 'valid' ? Result.ok(human) : Result.err({ type: 'CREDENTIALS_INVALID' });
+    if (token === 'denied') return Result.ok({ ...user, permissions: [] });
+    return token === 'valid' ? Result.ok(user) : Result.err({ type: 'CREDENTIALS_INVALID' });
   }
 }
 class TestApiKeyVerifier extends ApiKeyVerifierPort {
@@ -65,7 +65,7 @@ class TestApiKeyVerifier extends ApiKeyVerifierPort {
 class FixtureController {
   publicEndpoint(): object { return { status: 'ok' }; }
 
-  humanEndpoint(principal: Principal): object {
+  userEndpoint(principal: Principal): object {
     return { id: principal.id, type: principal.type };
   }
 
@@ -75,16 +75,16 @@ class FixtureController {
 }
 
 Controller('fixture')(FixtureController);
-function decorateMethod(name: 'publicEndpoint' | 'humanEndpoint' | 'machineEndpoint', decorators: MethodDecorator[]): void {
+function decorateMethod(name: 'publicEndpoint' | 'userEndpoint' | 'machineEndpoint', decorators: MethodDecorator[]): void {
   const descriptor = Object.getOwnPropertyDescriptor(FixtureController.prototype, name);
   for (const decorator of decorators) {
     decorator(FixtureController.prototype, name, descriptor!);
   }
 }
 decorateMethod('publicEndpoint', [Get('public')]);
-decorateMethod('humanEndpoint', [
-  Get('human'),
-  UseGuards(HumanAuthenticationGuard, GateGuard),
+decorateMethod('userEndpoint', [
+  Get('user'),
+  UseGuards(UserAuthenticationGuard, GateGuard),
   Authorize('records:read'),
 ]);
 decorateMethod('machineEndpoint', [
@@ -92,7 +92,7 @@ decorateMethod('machineEndpoint', [
   UseGuards(ApiKeyAuthenticationGuard, GateGuard),
   Authorize('records:read'),
 ]);
-CurrentPrincipal()(FixtureController.prototype, 'humanEndpoint', 0);
+CurrentPrincipal()(FixtureController.prototype, 'userEndpoint', 0);
 CurrentPrincipal()(FixtureController.prototype, 'machineEndpoint', 0);
 
 class FixtureModule {}
@@ -100,7 +100,7 @@ Module({
   imports: [
     AuthzModule,
     AuthModule.register({
-      verifier: { provide: HumanCredentialVerifierPort, useClass: TestHumanVerifier },
+      verifier: { provide: UserCredentialVerifierPort, useClass: TestUserVerifier },
     }),
     ApiClientsModule.register({
       verifier: { provide: ApiKeyVerifierPort, useClass: TestApiKeyVerifier },
@@ -131,7 +131,7 @@ describe('HTTP authentication + authorization composition', () => {
   });
 
   it('returns 401 with RFC 9457 and challenge for missing Bearer token', async () => {
-    const response = await fetch(baseUrl + '/fixture/human');
+    const response = await fetch(baseUrl + '/fixture/user');
     expect(response.status).toBe(401);
     expect(response.headers.get('content-type')).toContain('application/problem+json');
     expect(response.headers.get('www-authenticate')).toContain('Bearer');
@@ -140,7 +140,7 @@ describe('HTTP authentication + authorization composition', () => {
 
   it('returns 401 for invalid, expired and inactive credentials without leaking private state', async () => {
     for (const token of ['bad', 'expired', 'suspended']) {
-      const response = await fetch(baseUrl + '/fixture/human', {
+      const response = await fetch(baseUrl + '/fixture/user', {
         headers: { Authorization: 'Bearer ' + token },
       });
       const body = await response.json() as { detail: string; status: number };
@@ -151,7 +151,7 @@ describe('HTTP authentication + authorization composition', () => {
   });
 
   it('returns 403 when authenticated but not authorized', async () => {
-    const response = await fetch(baseUrl + '/fixture/human', {
+    const response = await fetch(baseUrl + '/fixture/user', {
       headers: { Authorization: 'Bearer denied' },
     });
     expect(response.status).toBe(403);
@@ -159,16 +159,16 @@ describe('HTTP authentication + authorization composition', () => {
     expect(await response.json()).toMatchObject({ status: 403 });
   });
 
-  it('passes a trusted human Principal through @CurrentPrincipal', async () => {
-    const response = await fetch(baseUrl + '/fixture/human', {
+  it('passes a trusted user Principal through @CurrentPrincipal', async () => {
+    const response = await fetch(baseUrl + '/fixture/user', {
       headers: { Authorization: 'Bearer valid' },
     });
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ id: 'human-test', type: 'HUMAN' });
+    expect(await response.json()).toEqual({ id: 'user-test', type: 'USER' });
   });
 
   it('denies ambiguous credentials instead of selecting one', async () => {
-    const response = await fetch(baseUrl + '/fixture/human', {
+    const response = await fetch(baseUrl + '/fixture/user', {
       headers: { Authorization: 'Bearer valid', 'x-api-key': 'api-valid' },
     });
     expect(response.status).toBe(401);
@@ -183,7 +183,7 @@ describe('HTTP authentication + authorization composition', () => {
     expect(missing.status).toBe(401);
   });
 
-  it('authenticates a machine independently of humans', async () => {
+  it('authenticates a machine independently of users', async () => {
     const response = await fetch(baseUrl + '/fixture/machine', {
       headers: { 'x-api-key': 'api-valid' },
     });
@@ -192,13 +192,13 @@ describe('HTTP authentication + authorization composition', () => {
   });
 
   it('turns unexpected provider errors into safe HTTP 500 without disclosing stack', async () => {
-    const response = await fetch(baseUrl + '/fixture/human', {
+    const response = await fetch(baseUrl + '/fixture/user', {
       headers: { Authorization: 'Bearer panic' },
     });
     const body = await response.text();
     expect(response.status).toBe(500);
     expect(response.headers.get('content-type')).toContain('application/problem+json');
     expect(body).not.toContain('private technical failure');
-    expect(body).not.toContain('at TestHumanVerifier');
+    expect(body).not.toContain('at TestUserVerifier');
   });
 });

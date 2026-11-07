@@ -4,15 +4,15 @@ import {
   readBearerCredential,
   type AuthenticatedHttpRequest,
 } from '@/shared/infrastructure/http/credentials/credential-reader';
-import { AuthenticateHumanUseCase } from '../../../application/use-cases/authenticate-human.use-case';
+import { AuthenticateUserUseCase } from '../../../application/use-cases/authenticate-user.use-case';
 
 /**
- * Use BEFORE GateGuard: @UseGuards(HumanAuthenticationGuard, GateGuard).
+ * Use BEFORE GateGuard: @UseGuards(UserAuthenticationGuard, GateGuard).
  * Throws only at Nest's protocol boundary, never in the application use case.
  */
 @Injectable()
-export class HumanAuthenticationGuard implements CanActivate {
-  constructor(private readonly authenticate: AuthenticateHumanUseCase) {}
+export class UserAuthenticationGuard implements CanActivate {
+  constructor(private readonly authenticate: AuthenticateUserUseCase) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<AuthenticatedHttpRequest>();

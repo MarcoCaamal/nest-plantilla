@@ -1,21 +1,21 @@
 import { Result, type Result as ResultType } from '@/shared/core/result';
 import type { AuthenticationError } from '@/shared/domain/auth/authentication-error';
-import { snapshotPrincipal, type HumanPrincipal } from '@/shared/domain/auth/principal';
-import { HumanCredentialVerifierPort } from '../ports/human-credential-verifier.port';
+import { snapshotPrincipal, type UserPrincipal } from '@/shared/domain/auth/principal';
+import { UserCredentialVerifierPort } from '../ports/user-credential-verifier.port';
 
-export interface AuthenticateHumanInput {
+export interface AuthenticateUserInput {
   readonly credential: string;
 }
 
 /** A verified identity is always normalized before reaching authorization. */
-export class AuthenticateHumanUseCase {
-  constructor(private readonly verifier: HumanCredentialVerifierPort) {}
+export class AuthenticateUserUseCase {
+  constructor(private readonly verifier: UserCredentialVerifierPort) {}
 
-  async execute(input: AuthenticateHumanInput): Promise<ResultType<HumanPrincipal, AuthenticationError>> {
+  async execute(input: AuthenticateUserInput): Promise<ResultType<UserPrincipal, AuthenticationError>> {
     if (!input.credential) return Result.err({ type: 'CREDENTIALS_MISSING' });
     const result = await this.verifier.verify(input.credential);
     if (!result.ok) return result;
-    if (result.value.type !== 'HUMAN' || !result.value.id ||
+    if (result.value.type !== 'USER' || !result.value.id ||
       !Array.isArray(result.value.roles) || !Array.isArray(result.value.permissions)) {
       return Result.err({ type: 'CREDENTIALS_INVALID' });
     }
