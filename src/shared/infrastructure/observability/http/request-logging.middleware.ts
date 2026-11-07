@@ -1,13 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import { type IncomingMessage, type ServerResponse } from 'node:http';
 import { Injectable, type NestMiddleware } from '@nestjs/common';
+import type { PrincipalType } from '@/shared/domain/auth/principal';
 import { requestContext } from '../context/request-context';
 import { JsonLogger } from '../logging/json-logger';
 
 type HttpRequest = IncomingMessage & {
   readonly route?: { readonly path?: string };
   readonly baseUrl?: string;
-  readonly principal?: { readonly id: string; readonly type: 'USER' | 'MACHINE' };
+  readonly principal?: { readonly id: string; readonly type: PrincipalType };
 };
 type HttpResponse = ServerResponse<IncomingMessage>;
 type Next = (error?: unknown) => void;

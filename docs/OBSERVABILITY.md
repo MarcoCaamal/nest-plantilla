@@ -85,6 +85,13 @@ Los fallos 500 producen un registro técnico con stack
 (`http.request.completed`); son eventos **diferentes**, no dos registros
 de acceso. Solo las excepciones inesperadas necesitan stack.
 
+`JsonLogger` admite las firmas variádicas de `LoggerService`:
+el último argumento string de `log/warn/debug/verbose/fatal` se interpreta
+como contexto y los parámetros adicionales se guardan sanitizados en
+`params`. En `error`, se distingue el stack del contexto para no registrar
+`"stack": "GlobalExceptionFilter"` cuando el framework añade su nombre.
+Los errores anidados preservan `cause` y `code` con límites de profundidad.
+
 ## Seguridad y límites
 
 - No registrar por defecto headers, cookies, query strings, request/response
@@ -93,6 +100,10 @@ de acceso. Solo las excepciones inesperadas necesitan stack.
   `authorization`, `apiKey`, `secret`, `headers`, `body`,
   y corta metadatos desmesurados o circulares; esto es **defensa adicional**,
   no una garantía contra secretos incluidos manualmente en cadenas.
+- Los campos exactos `query`, `body`, `payload` y `headers` se redactan,
+  pero `queryDurationMs`, `slowQueryCount` y `bodySize` se conservan
+  como métricas legítimas. Compartir la misma referencia en dos ramas del
+  payload no se interpreta como un ciclo.
 - No utilizar IDs de usuarios, request IDs ni rutas con parámetros como
   etiquetas de métricas por su alta cardinalidad.
 - El `requestId` sirve para correlación, pero **no es prueba de identidad**

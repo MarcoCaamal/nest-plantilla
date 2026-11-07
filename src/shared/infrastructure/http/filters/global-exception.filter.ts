@@ -29,12 +29,9 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       this.logger.error({
         event: 'http.unhandled_exception',
         statusCode: status,
-        error: exception instanceof Error ? {
-          name: exception.name,
-          message: exception.message,
-          stack: exception.stack,
-        } : { name: 'UnknownError' },
-      });
+        // Delegate Error serialization (stack, cause and code) to JsonLogger.
+        error: exception instanceof Error ? exception : { name: 'UnknownError' },
+      }, undefined);
     }
 
     const problem: ProblemDetails = getExplicitProblem(exception, status) ?? {
