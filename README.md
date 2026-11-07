@@ -81,3 +81,7 @@ Tipos agnósticos `PageQuery`, `CursorQuery` y `Paginated<T>`; schemas HTTP Zod 
 ## Configuración validada y bootstrap
 
 El entorno se valida con Zod antes de crear la aplicación; `AppConfig` se inyecta como objeto inmutable. `PORT`, `NODE_ENV`, `LOG_LEVEL` y `SERVICE_NAME` tienen defaults y reglas estrictas. Se habilitan los shutdown hooks y se oculta `X-Powered-By`. `ClockPort` e `IdGeneratorPort` incluyen adaptadores opcionales sin proveedores de terceros. Detalles en [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
+
+## Readiness opcional
+
+`/health` es liveness. `/health/ready` solo se habilita al registrar `ReadinessModule` con checks reales y timeout; devuelve 503 RFC 9457 ante fallos, timeouts o shutdown. No se instalan dependencias externas ni checks ficticios. Ver [docs/READINESS.md](docs/READINESS.md).
