@@ -30,6 +30,12 @@ Este repositorio es una plantilla **agnóstica a proveedores** de NestJS 12+, Ty
 - No registrar headers, bodies, tokens ni credenciales; logs de fallos técnicos con stack interno y respuestas RFC 9457 sanitizadas.
 - OpenTelemetry, exportadores, storage y auditoría persistente son adaptadores o módulos opcionales. No introducirlos por defecto.
 
+## Configuración y ciclo de vida
+- Validar entorno mediante Zod 4 en bootstrap antes de crear NestJS. No leer variables crudas en casos de uso ni dominio.
+- Inyectar `AppConfig` inmutable mediante ConfigModule. Los proyectos extienden `baseEnvSchema` según sus necesidades.
+- Registrar `enableShutdownHooks()` y desactivar `X-Powered-By`. `/health` es liveness; readiness solo con comprobaciones de dependencias reales.
+- Para tiempo/IDs de negocio usar puertos `ClockPort`/`IdGeneratorPort` y conectar adaptadores concretos solo si un caso de uso los requiere.
+
 ## Validación y adaptadores
 - Zod 4 + Standard Schema nativo de Nest 12; schema en `infrastructure/http/<audiencia>/schemas`; nunca Zod en domain/application.
 - Usar `.meta()` y `createZodDto`, `@Body({schema})`, `StandardSchemaValidationPipe`. Los HttpMappers convierten DTOs a inputs planos.

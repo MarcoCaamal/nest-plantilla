@@ -130,3 +130,7 @@ ni políticas de negocio genéricas para recursos inexistentes.
 ## Observabilidad
 
 `shared/infrastructure/observability/` ofrece logger JSON de Nest, correlación por AsyncLocalStorage y un middleware de logging HTTP registrado por `ObservabilityModule`. No agrega infraestructura externa, SDKs ni dependencias en dominio/aplicación. Ver [OBSERVABILITY.md](OBSERVABILITY.md).
+
+## Configuración y adaptadores del sistema
+
+`shared/infrastructure/config` valida variables con Zod 4 antes de iniciar Nest y publica `AppConfig` como dependencia inmutable. `shared/application/ports` incluye `ClockPort`/`IdGeneratorPort` y `shared/infrastructure/system` sus implementaciones por defecto, no registradas automáticamente. Ver [CONFIGURATION.md](CONFIGURATION.md).
