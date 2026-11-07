@@ -1,0 +1,238 @@
+import 'reflect-metadata';
+import { randomUUID } from 'node:crypto';
+import { UuidV7Generator } from '@/shared/infrastructure/system/uuid-v7-generator';
+import { Argon2PasswordHasherAdapter } from '@/shared/infrastructure/security/argon2-password-hasher.adapter';
+import {
+  Module, StandardSchemaValidationPipe, type INestApplication,
+} from '@nestjs/common';
+import { NestFactory } from '@nestjs/core';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { AppModule } from '@/app.module';
+import { AppConfig, ConfigModule, parseEnv } from '@/shared/infrastructure/config/app-config';
+import { presetEnvSchema } from '@/shared/infrastructure/config/env.schema';
+import { PrismaModule } from '@/shared/infrastructure/persistence/prisma.module';
+import { PrismaService } from '@/shared/infrastructure/persistence/prisma.service';
+import { PresetSystemModule } from '@/shared/infrastructure/system/preset-system.module';
+import { PresetSecurityModule } from '@/shared/infrastructure/security/preset-security.module';
+import { OutboxModule } from '@/shared/infrastructure/outbox/outbox.module';
+import { JwtAuthnModule } from '@/modules/auth/jwt-authn.module';
+import { AuthPresetModule } from '@/modules/auth/auth-preset.module';
+import { ApiClientsPresetModule } from '@/modules/api-clients/api-clients-preset.module';
+import { GlobalExceptionFilter } from '@/shared/infrastructure/http/filters/global-exception.filter';
+import { HttpResultInterceptor } from '@/shared/infrastructure/http/interceptors/http-result.interceptor';
+
+const database = process.env.TEST_DATABASE_URL;
+const run = database ? describe : describe.skip;
+
+run('Nest HTTP opinionated preset (real PostgreSQL)', () => {
+  let app: INestApplication;
+  let prisma: PrismaService;
+  let base: string;
+  const id = randomUUID();
+  const email = 'http-'+id+'@example.test';
+  const password = 'Http-Strong-Password-for-Tests-2026';
+  let staffUserId: string | undefined;
+  let staffRoleId: string | undefined;
+  let apiClientId: string | undefined;
+
+  async function request(
+    path: string,
+    options: { method?: string; body?: unknown; headers?: Record<string, string> } = {},
+  ): Promise<{ status: number; headers: Headers; body: Record<string, unknown> }> {
+    const response = await fetch(base + path, {
+      method: options.method ?? 'GET',
+      headers: {
+        ...(options.body === undefined ? {} : { 'Content-Type': 'application/json' }),
+        ...options.headers,
+      },
+      ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
+    });
+    const text = await response.text();
+    return { status: response.status, headers: response.headers, body: text ? JSON.parse(text) : null };
+  }
+
+  beforeAll(async () => {
+    const config = new AppConfig(parseEnv({
+      NODE_ENV: 'test',
+      DATABASE_URL: database!,
+      JWT_ACCESS_SECRET: 'test-secret-abcdefghijklmnopqrstuvwxyz-0123456789',
+      MAIL_FROM: 'test@example.test',
+    }, presetEnvSchema));
+    class TestPresetApp {}
+    Module({
+      imports: [
+        AppModule, ConfigModule.register(config), PrismaModule, PresetSystemModule,
+        PresetSecurityModule, OutboxModule, JwtAuthnModule, AuthPresetModule, ApiClientsPresetModule,
+      ],
+    })(TestPresetApp);
+    app = await NestFactory.create(TestPresetApp, { logger: false });
+    app.useGlobalPipes(new StandardSchemaValidationPipe());
+    app.useGlobalFilters(new GlobalExceptionFilter());
+    app.useGlobalInterceptors(new HttpResultInterceptor());
+    await app.listen(0, '127.0.0.1');
+    const address = app.getHttpServer().address() as { port: number };
+    base = 'http://127.0.0.1:' + address.port;
+    prisma = app.get(PrismaService);
+  });
+
+  afterAll(async () => {
+    if (prisma) {
+      const user = await prisma.user.findUnique({ where: { email } });
+      if (user) {
+        await prisma.outboxMessage.deleteMany({
+          where: { payload: { path: ['aggregateId'], equals: user.id } },
+        });
+        await prisma.user.deleteMany({ where: { id: user.id } });
+      }
+      if (apiClientId) await prisma.apiClient.deleteMany({ where: { id: apiClientId } });
+      if (staffUserId) await prisma.user.deleteMany({ where: { id: staffUserId } });
+      if (staffRoleId) await prisma.role.deleteMany({ where: { id: staffRoleId } });
+      await prisma.idempotencyRecord.deleteMany({ where: { actorId: { startsWith: 'anonymous:' } } });
+    }
+    if (app) await app.close();
+  });
+
+  it('validates HTTP, stores events, verifies account, JWT login, refresh and reuse', async () => {
+    const invalid = await request('/auth/register', { method: 'POST', body: { email, password: 'short' } });
+    expect(invalid.status).toBe(400);
+    expect(invalid.body).toMatchObject({ status: 400 });
+
+    const registered = await request('/auth/register', {
+      method: 'POST', body: { email, password },
+      headers: { 'Idempotency-Key': 'http-integration-'+id },
+    });
+    expect(registered.status).toBe(201);
+    expect(registered.body.status).toBe('PENDING_VERIFICATION');
+
+    const repeated = await request('/auth/register', {
+      method: 'POST', body: { email, password },
+      headers: { 'Idempotency-Key': 'http-integration-'+id },
+    });
+    expect(repeated.status).toBe(201);
+    expect(repeated.body).toEqual(registered.body);
+
+    const event = await prisma.outboxMessage.findFirst({
+      where: { eventName: 'account.verify_email_requested', payload: { path: ['aggregateId'], equals: registered.body.id } },
+    });
+    expect(event).not.toBeNull();
+    const payload = event?.payload as { token: string };
+    const verified = await request('/auth/verify-email', {
+      method: 'POST', body: { token: payload.token },
+    });
+    expect(verified.status).toBe(200);
+
+    const login = await request('/auth/login', {
+      method: 'POST', body: { email, password },
+    });
+    expect(login.status).toBe(200);
+    expect(login.body).toMatchObject({ tokenType: 'Bearer', expiresIn: 900 });
+    expect(typeof login.body.accessToken).toBe('string');
+
+    const me = await request('/auth/me', {
+      headers: { Authorization: 'Bearer ' + login.body.accessToken },
+    });
+    expect(me.status).toBe(200);
+    expect(me.body.id).toBe(registered.body.id);
+
+    const forbidden = await request('/staff/users', {
+      headers: { Authorization: 'Bearer ' + login.body.accessToken },
+    });
+    expect(forbidden.status).toBe(403);
+
+    const rotated = await request('/auth/refresh', {
+      method: 'POST', body: { refreshToken: login.body.refreshToken },
+    });
+    expect(rotated.status).toBe(200);
+    const replay = await request('/auth/refresh', {
+      method: 'POST', body: { refreshToken: login.body.refreshToken },
+    });
+    expect(replay.status).toBe(401);
+    expect(replay.body).toMatchObject({ code: 'AUTHENTICATION_FAILED' });
+
+    const invalidNewToken = await request('/auth/me', {
+      headers: { Authorization: 'Bearer ' + rotated.body.accessToken },
+    });
+    expect(invalidNewToken.status).toBe(401);
+  });
+
+  it('provisions hashed API keys, verifies MachinePrincipal, and enforces staff RBAC', async () => {
+    const generator = new UuidV7Generator();
+    staffUserId = generator.generate();
+    staffRoleId = generator.generate();
+    const staffEmail = 'staff-'+id+'@example.test';
+    const staffPassword = 'TestStaff-Password-Long-2026';
+    await prisma.user.create({
+      data: {
+        id: staffUserId, email: staffEmail,
+        passwordHash: await new Argon2PasswordHasherAdapter().hash(staffPassword),
+        status: 'ACTIVE', emailVerifiedAt: new Date(),
+      },
+    });
+    await prisma.role.create({
+      data: { id: staffRoleId, key: 'http-test-'+id, name: 'HTTP Test Staff' },
+    });
+    await prisma.userRole.create({
+      data: { id: generator.generate(), userId: staffUserId, roleId: staffRoleId },
+    });
+    for (const key of ['users:read', 'users:write', 'api-clients:write']) {
+      const permission = await prisma.permission.upsert({
+        where: { key },
+        create: { id: generator.generate(), key },
+        update: {},
+      });
+      await prisma.rolePermission.create({
+        data: { id: generator.generate(), roleId: staffRoleId, permissionId: permission.id },
+      });
+    }
+
+    const login = await request('/auth/login', {
+      method: 'POST', body: { email: staffEmail, password: staffPassword },
+    });
+    expect(login.status).toBe(200);
+    const token = login.body.accessToken as string;
+    const users = await request('/staff/users', {
+      headers: { Authorization: 'Bearer ' + token },
+    });
+    expect(users.status).toBe(200);
+    const client = await request('/staff/api-clients', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + token },
+      body: { name: 'HTTP integration partner', scopes: ['contracts:read'], permissions: ['users:read'] },
+    });
+    expect(client.status).toBe(201);
+    apiClientId = client.body.id as string;
+    const apiKey = client.body.key as string;
+    const stored = await prisma.apiClient.findUnique({ where: { id: apiClientId } });
+    expect(stored?.keyHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(stored?.keyHash).not.toBe(apiKey);
+    expect(apiKey).toMatch(/^np_/);
+    const machine = await request('/partner-b2b/whoami', {
+      headers: { 'X-API-Key': apiKey },
+    });
+    expect(machine.status).toBe(200);
+    expect(machine.body.type).toBe('MACHINE');
+    expect(machine.body.id).toBe(apiClientId);
+    expect((await request('/partner-b2b/whoami', {
+      headers: { 'X-API-Key': 'not-a-valid-key' },
+    })).status).toBe(401);
+    expect((await request('/partner-b2b/whoami', {
+      headers: { Authorization: 'Bearer ' + token },
+    })).status).toBe(401);
+  });
+  it('returns RFC 9457 with Retry-After on brute-force attempts', async () => {
+    const attempts: number[] = [];
+    for (let i = 0; i < 7; i++) {
+      const response = await request('/auth/login', {
+        method: 'POST', body: { email: 'unknown-'+id+'@example.test', password: 'incorrect' },
+      });
+      attempts.push(response.status);
+      if (response.status === 429) {
+        expect(response.headers.get('retry-after')).not.toBeNull();
+        expect(response.body).toMatchObject({ status: 429, code: 'RATE_LIMITED' });
+        break;
+      }
+    }
+    expect(attempts).toContain(429);
+  });
+
+});

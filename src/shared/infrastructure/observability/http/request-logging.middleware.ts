@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { trace } from '@opentelemetry/api';
 import { type IncomingMessage, type ServerResponse } from 'node:http';
 import { Injectable, type NestMiddleware } from '@nestjs/common';
 import type { PrincipalType } from '@/shared/domain/auth/principal';
@@ -31,7 +32,12 @@ export class RequestLoggingMiddleware implements NestMiddleware {
 
   use(request: HttpRequest, response: HttpResponse, next: Next): void {
     const requestId = resolveRequestId(request.headers['x-request-id']);
-    const initialContext = { requestId };
+    const activeSpan = trace.getActiveSpan()?.spanContext();
+    const initialContext = {
+      requestId,
+      ...(activeSpan && activeSpan.traceId !== '00000000000000000000000000000000'
+        ? { traceId: activeSpan.traceId, spanId: activeSpan.spanId } : {}),
+    };
     const startedAt = process.hrtime.bigint();
     response.setHeader('X-Request-ID', requestId);
 

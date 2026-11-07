@@ -1,4 +1,8 @@
 import type { LoggerService } from '@nestjs/common';
+import pino from 'pino';
+import {
+  logs, SeverityNumber, context as otelContext, trace as otelTrace, TraceFlags,
+} from '@opentelemetry/api';
 import { requestContext } from '../context/request-context';
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'silent';
@@ -60,13 +64,22 @@ function sanitize(value: unknown, depth = 0, seen: WeakSet<object> = new WeakSet
   }
 }
 
+// Pino is the production log engine. JsonLogger still sanitizes metadata and
+// provides the stable Nest / test-writer interface from main.
+const productionLogger = pino({
+  level: 'debug',
+  base: null,
+  timestamp: false,
+  formatters: { level: (label) => ({ severity: label }) },
+  redact: { paths: ['password', 'token', 'authorization', 'apiKey', 'headers', 'body'], censor: '[REDACTED]' },
+});
+
 function defaultWrite(line: string, severity: Severity): void {
-  if (severity === 'error') process.stderr.write(line + '\n');
-  else process.stdout.write(line + '\n');
+  productionLogger[severity](JSON.parse(line) as object);
 }
 
 /**
- * Minimal structured Nest logger with automatic ALS correlation. No Pino/Winston.
+ * Structured Nest logger with Pino transport and automatic ALS correlation.
  * Callers should log named fields, not arbitrary request bodies or token strings.
  */
 export class JsonLogger implements LoggerService {
@@ -173,6 +186,33 @@ export class JsonLogger implements LoggerService {
     };
 
     this.writer(JSON.stringify(record), level);
+    // The SDK's global provider is a no-op unless tracing.ts registered OTLP.
+    // Keep the OTel attributes scalar and already redacted by sanitize().
+    const logAttributes: Record<string, string | number | boolean> = {};
+    for (const key of ['event', 'requestId', 'traceId', 'spanId', 'actorId', 'actorType', 'statusCode', 'service']) {
+      const value: unknown = record[key as keyof typeof record];
+      if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+        logAttributes[key] = value;
+      }
+    }
+    // Include the original request span as native OTLP trace context, even
+    // when the HTTP completion callback fires outside its active span.
+    const logContext = correlation?.traceId && correlation.spanId
+      ? otelTrace.setSpanContext(otelContext.active(), {
+        traceId: correlation.traceId,
+        spanId: correlation.spanId,
+        traceFlags: TraceFlags.SAMPLED,
+      }) : undefined;
+    logs.getLogger('nest-plantilla').emit({
+      ...(logContext ? { context: logContext } : {}),
+      body: messageText,
+      severityText: level.toUpperCase(),
+      severityNumber: {
+        debug: SeverityNumber.DEBUG, info: SeverityNumber.INFO,
+        warn: SeverityNumber.WARN, error: SeverityNumber.ERROR,
+      }[level],
+      attributes: logAttributes,
+    });
   }
 }
 

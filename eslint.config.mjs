@@ -37,6 +37,7 @@ export default tseslint.config(
     plugins: { boundaries },
     settings: {
       'import/resolver': { typescript: { project: './tsconfig.json' } },
+      'boundaries/files': [{ category: 'feature-public', pattern: 'src/modules/*/public.ts' }],
       'boundaries/elements': [
         { type: 'shared-core', pattern: 'src/shared/core' },
         { type: 'shared-domain', pattern: 'src/shared/domain' },
@@ -64,12 +65,14 @@ export default tseslint.config(
             local(['shared-core', 'shared-domain', 'shared-application']),
             sameFeature('feature-domain'),
             sameFeature('feature-application'),
+            { to: { file: { categories: 'feature-public' } } },
           ] },
           { from: element('feature-infrastructure'), allow: [
             local(['shared-core', 'shared-domain', 'shared-application', 'shared-infrastructure']),
             sameFeature('feature-domain'),
             sameFeature('feature-application'),
             sameFeature('feature-infrastructure'),
+            { to: { file: { categories: 'feature-public' } } },
             external,
           ] },
           { from: element('feature-root'), allow: [
@@ -78,6 +81,7 @@ export default tseslint.config(
             sameFeature('feature-application'),
             sameFeature('feature-infrastructure'),
             sameFeature('feature-root'),
+            { to: { file: { categories: 'feature-public' } } },
             external,
           ] },
           { from: element('bootstrap'), allow: [{ to: { element: { type: '*' } } }, external] },

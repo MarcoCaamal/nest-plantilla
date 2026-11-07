@@ -89,3 +89,7 @@ El entorno se valida con Zod antes de crear la aplicación; `AppConfig` se inyec
 ## Readiness opcional
 
 `/health` es liveness. `/health/ready` solo se habilita al registrar `ReadinessModule` con checks reales y timeout; devuelve 503 RFC 9457 ante fallos, timeouts o shutdown. No se instalan dependencias externas ni checks ficticios. Ver [docs/READINESS.md](docs/READINESS.md).
+
+## Preset opinionated
+
+La rama preset/opinionated incorpora Prisma 7/PostgreSQL, Argon2id, UUID v7, auth JWT con rotación de sesiones, RBAC, Resend/Mailpit y transactional outbox, Pino/OpenTelemetry/OpenObserve, rate limiting e idempotencia mediante adaptadores. Configuración, puertos, migraciones y pruebas: [docs/PRESET_STACK.md](docs/PRESET_STACK.md). La rama principal mantiene los contratos agnósticos.

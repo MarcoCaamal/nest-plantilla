@@ -1,0 +1,40 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: nest_plantilla
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d nest_plantilla"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:1027:1025"
+      - "127.0.0.1:8026:8025"
+
+  openobserve:
+    image: public.ecr.aws/zinclabs/openobserve:latest
+    restart: unless-stopped
+    environment:
+      ZO_ROOT_USER_EMAIL: ${OPENOBSERVE_USERNAME:?Configure OpenObserve credentials}
+      ZO_ROOT_USER_PASSWORD: ${OPENOBSERVE_PASSWORD:?Configure OpenObserve credentials}
+      ZO_DATA_DIR: /data
+    volumes:
+      - openobserve-data:/data
+    ports:
+      - "127.0.0.1:5080:5080"
+
+volumes:
+  postgres-data:
+  openobserve-data:
