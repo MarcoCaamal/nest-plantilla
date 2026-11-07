@@ -134,3 +134,7 @@ ni políticas de negocio genéricas para recursos inexistentes.
 ## Paginación y listados seguros
 
 `shared/core/pagination.ts` modela page/cursor sin ORM; `shared/domain/auth/scoped-list-query.ts` exige la presencia de un AccessScope. Los schemas HTTP Zod 4 coercionan y limitan parámetros (limit máximo 100). El repositorio de cada feature implementa AND entre scope y filtros del cliente. Ver [PAGINATION.md](PAGINATION.md).
+
+## Configuración y adaptadores del sistema
+
+`shared/infrastructure/config` valida variables con Zod 4 antes de iniciar Nest y publica `AppConfig` como dependencia inmutable. `shared/application/ports` incluye `ClockPort`/`IdGeneratorPort` y `shared/infrastructure/system` sus implementaciones por defecto, no registradas automáticamente. Ver [CONFIGURATION.md](CONFIGURATION.md).
