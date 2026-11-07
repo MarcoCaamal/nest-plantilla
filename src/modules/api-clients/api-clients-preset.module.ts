@@ -8,7 +8,7 @@ import { CreateApiClientUseCase } from './application/use-cases/create-api-clien
 import { PrismaApiKeyVerifierAdapter } from './infrastructure/prisma-api-key-verifier.adapter';
 import { PrismaApiClientRepository } from './infrastructure/persistence/prisma-api-client.repository';
 import { SecureApiKeyMaterialAdapter } from './infrastructure/api-key-material.adapter';
-import { StaffApiClientsController } from './infrastructure/http/staff/staff-api-clients.controller';
+import { BackofficeApiClientsController } from './infrastructure/http/backoffice/backoffice-api-clients.controller';
 import { PartnerIdentityController } from './infrastructure/http/partner-b2b/partner-identity.controller';
 
 @Module({
@@ -17,7 +17,7 @@ import { PartnerIdentityController } from './infrastructure/http/partner-b2b/par
       verifier: { provide: ApiKeyVerifierPort, useClass: PrismaApiKeyVerifierAdapter },
     }),
   ],
-  controllers: [StaffApiClientsController, PartnerIdentityController],
+  controllers: [BackofficeApiClientsController, PartnerIdentityController],
   providers: [
     PrismaApiClientRepository,
     { provide: ApiClientRepositoryPort, useExisting: PrismaApiClientRepository },

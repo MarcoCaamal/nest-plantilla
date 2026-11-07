@@ -30,7 +30,7 @@ import { GateGuard } from '@/shared/infrastructure/http/guards/gate.guard';
 const user: UserPrincipal = {
   id: 'user-test',
   type: 'USER',
-  roles: ['staff'],
+  roles: ['operator'],
   permissions: ['records:read'],
   attributes: { tenantId: 'tenant-test' },
 };

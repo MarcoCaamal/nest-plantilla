@@ -31,8 +31,8 @@ run('Nest HTTP opinionated preset (real PostgreSQL)', () => {
   const id = randomUUID();
   const email = 'http-'+id+'@example.test';
   const password = 'Http-Strong-Password-for-Tests-2026';
-  let staffUserId: string | undefined;
-  let staffRoleId: string | undefined;
+  let backofficeUserId: string | undefined;
+  let backofficeRoleId: string | undefined;
   let apiClientId: string | undefined;
 
   async function request(
@@ -85,12 +85,21 @@ run('Nest HTTP opinionated preset (real PostgreSQL)', () => {
         await prisma.user.deleteMany({ where: { id: user.id } });
       }
       if (apiClientId) await prisma.apiClient.deleteMany({ where: { id: apiClientId } });
-      if (staffUserId) await prisma.user.deleteMany({ where: { id: staffUserId } });
-      if (staffRoleId) await prisma.role.deleteMany({ where: { id: staffRoleId } });
+      if (backofficeUserId) await prisma.user.deleteMany({ where: { id: backofficeUserId } });
+      if (backofficeRoleId) await prisma.role.deleteMany({ where: { id: backofficeRoleId } });
       await prisma.role.deleteMany({ where: { key: 'http-rbac-'+id } });
       await prisma.idempotencyRecord.deleteMany({ where: { actorId: { startsWith: 'anonymous:' } } });
     }
     if (app) await app.close();
+  });
+
+  it('exposes protected backoffice routes without legacy staff aliases', async () => {
+    for (const path of ['/backoffice/users', '/backoffice/roles', '/backoffice/permissions']) {
+      expect((await request(path)).status).toBe(401);
+    }
+    for (const path of ['/staff/users', '/staff/roles', '/staff/permissions', '/staff/api-clients']) {
+      expect((await request(path)).status).toBe(404);
+    }
   });
 
   it('validates HTTP, stores events, verifies account, JWT login, refresh and reuse', async () => {
@@ -135,7 +144,7 @@ run('Nest HTTP opinionated preset (real PostgreSQL)', () => {
     expect(me.status).toBe(200);
     expect(me.body.id).toBe(registered.body.id);
 
-    const forbidden = await request('/staff/users', {
+    const forbidden = await request('/backoffice/users', {
       headers: { Authorization: 'Bearer ' + login.body.accessToken },
     });
     expect(forbidden.status).toBe(403);
@@ -156,24 +165,24 @@ run('Nest HTTP opinionated preset (real PostgreSQL)', () => {
     expect(invalidNewToken.status).toBe(401);
   });
 
-  it('provisions hashed API keys, verifies MachinePrincipal, and enforces staff RBAC', async () => {
+  it('provisions hashed API keys, verifies MachinePrincipal, and enforces backoffice RBAC', async () => {
     const generator = new UuidV7Generator();
-    staffUserId = generator.generate();
-    staffRoleId = generator.generate();
-    const staffEmail = 'staff-'+id+'@example.test';
-    const staffPassword = 'TestStaff-Password-Long-2026';
+    backofficeUserId = generator.generate();
+    backofficeRoleId = generator.generate();
+    const backofficeEmail = 'backoffice-'+id+'@example.test';
+    const backofficePassword = 'TestBackoffice-Password-Long-2026';
     await prisma.user.create({
       data: {
-        id: staffUserId, email: staffEmail,
-        passwordHash: await new Argon2PasswordHasherAdapter().hash(staffPassword),
+        id: backofficeUserId, email: backofficeEmail,
+        passwordHash: await new Argon2PasswordHasherAdapter().hash(backofficePassword),
         status: 'ACTIVE', emailVerifiedAt: new Date(),
       },
     });
     await prisma.role.create({
-      data: { id: staffRoleId, key: 'http-test-'+id, name: 'HTTP Test Staff' },
+      data: { id: backofficeRoleId, key: 'http-test-'+id, name: 'HTTP Test Backoffice' },
     });
     await prisma.userRole.create({
-      data: { id: generator.generate(), userId: staffUserId, roleId: staffRoleId },
+      data: { id: generator.generate(), userId: backofficeUserId, roleId: backofficeRoleId },
     });
     for (const key of ['users:read', 'users:write', 'roles:read', 'roles:write', 'permissions:read', 'api-clients:write']) {
       const permission = await prisma.permission.upsert({
@@ -182,20 +191,20 @@ run('Nest HTTP opinionated preset (real PostgreSQL)', () => {
         update: {},
       });
       await prisma.rolePermission.create({
-        data: { id: generator.generate(), roleId: staffRoleId, permissionId: permission.id },
+        data: { id: generator.generate(), roleId: backofficeRoleId, permissionId: permission.id },
       });
     }
 
     const login = await request('/auth/login', {
-      method: 'POST', body: { email: staffEmail, password: staffPassword },
+      method: 'POST', body: { email: backofficeEmail, password: backofficePassword },
     });
     expect(login.status).toBe(200);
     const token = login.body.accessToken as string;
-    const users = await request('/staff/users', {
+    const users = await request('/backoffice/users', {
       headers: { Authorization: 'Bearer ' + token },
     });
     expect(users.status).toBe(200);
-    const client = await request('/staff/api-clients', {
+    const client = await request('/backoffice/api-clients', {
       method: 'POST',
       headers: { Authorization: 'Bearer ' + token },
       body: { name: 'HTTP integration partner', scopes: ['contracts:read'], permissions: ['users:read'] },
@@ -221,81 +230,81 @@ run('Nest HTTP opinionated preset (real PostgreSQL)', () => {
     })).status).toBe(401);
   });
   it('manages roles for generic users but exposes permissions through GET only', async () => {
-    const staffLogin = await request('/auth/login', {
+    const backofficeLogin = await request('/auth/login', {
       method: 'POST', body: {
-        email: 'staff-'+id+'@example.test', password: 'TestStaff-Password-Long-2026',
+        email: 'backoffice-'+id+'@example.test', password: 'TestBackoffice-Password-Long-2026',
       },
     });
-    expect(staffLogin.status).toBe(200);
-    const adminToken = staffLogin.body.accessToken as string;
+    expect(backofficeLogin.status).toBe(200);
+    const adminToken = backofficeLogin.body.accessToken as string;
     const auth = { Authorization: 'Bearer ' + adminToken };
     const registered = await prisma.user.findUniqueOrThrow({ where: { email } });
 
-    const permissions = await request('/staff/permissions', { headers: auth });
+    const permissions = await request('/backoffice/permissions', { headers: auth });
     expect(permissions.status).toBe(200);
     const catalog = permissions.body as unknown as Array<{ id: string; key: string }>;
     expect(catalog.map((entry) => entry.key)).toContain('roles:write');
     expect(catalog.map((entry) => entry.key)).toContain('permissions:read');
     expect(catalog.map((entry) => entry.key)).toEqual([...catalog.map((entry) => entry.key)].sort());
-    const readPermission = await request('/staff/permissions/users:read', { headers: auth });
+    const readPermission = await request('/backoffice/permissions/users:read', { headers: auth });
     expect(readPermission.status).toBe(200);
     expect(readPermission.body).toMatchObject({ key: 'users:read' });
-    expect((await request('/staff/permissions/no:such', { headers: auth })).status).toBe(404);
+    expect((await request('/backoffice/permissions/no:such', { headers: auth })).status).toBe(404);
     for (const method of ['POST', 'PATCH', 'DELETE']) {
-      const rejected = await request('/staff/permissions', {
+      const rejected = await request('/backoffice/permissions', {
         method, headers: auth, body: { key: 'not:createable' },
       });
       expect(rejected.status).toBe(404);
     }
-    expect((await request('/staff/permissions')).status).toBe(401);
+    expect((await request('/backoffice/permissions')).status).toBe(401);
 
     const genericLogin = await request('/auth/login', {
       method: 'POST', body: { email, password },
     });
     expect(genericLogin.status).toBe(200);
     const genericAuth = { Authorization: 'Bearer ' + genericLogin.body.accessToken };
-    expect((await request('/staff/permissions', { headers: genericAuth })).status).toBe(403);
-    expect((await request('/staff/roles', { headers: genericAuth })).status).toBe(403);
-    expect((await request('/staff/roles', {
+    expect((await request('/backoffice/permissions', { headers: genericAuth })).status).toBe(403);
+    expect((await request('/backoffice/roles', { headers: genericAuth })).status).toBe(403);
+    expect((await request('/backoffice/roles', {
       method: 'POST', headers: genericAuth, body: { key: 'forbidden-role', name: 'Forbidden Role' },
     })).status).toBe(403);
 
     const key = 'http-rbac-'+id;
-    const created = await request('/staff/roles', {
+    const created = await request('/backoffice/roles', {
       method: 'POST', headers: auth, body: { key, name: 'Read-only role' },
     });
     expect(created.status).toBe(201);
     expect(created.body).toMatchObject({ key, name: 'Read-only role', permissions: [] });
-    expect((await request('/staff/roles', {
+    expect((await request('/backoffice/roles', {
       method: 'POST', headers: auth, body: { key, name: 'Duplicate role' },
     })).status).toBe(409);
 
-    const updated = await request('/staff/roles/'+key, {
+    const updated = await request('/backoffice/roles/'+key, {
       method: 'PATCH', headers: auth,
       body: { name: 'Updated reader', description: 'Generic user role' },
     });
     expect(updated.status).toBe(200);
     expect(updated.body).toMatchObject({ key, name: 'Updated reader', description: 'Generic user role' });
-    expect((await request('/staff/roles/'+key, {
+    expect((await request('/backoffice/roles/'+key, {
       method: 'PATCH', headers: auth, body: {},
     })).status).toBe(400);
-    expect((await request('/staff/roles/'+key, {
+    expect((await request('/backoffice/roles/'+key, {
       method: 'POST', headers: auth, body: { permissionKey: 'unknown:permission' },
     })).status).toBe(404);
 
     for (let i = 0; i < 2; i++) {
-      expect((await request('/staff/roles/'+key+'/permissions', {
+      expect((await request('/backoffice/roles/'+key+'/permissions', {
         method: 'POST', headers: auth, body: { permissionKey: 'users:read' },
       })).status).toBe(200);
     }
-    expect((await request('/staff/roles/unknown-role/permissions', {
+    expect((await request('/backoffice/roles/unknown-role/permissions', {
       method: 'POST', headers: auth, body: { permissionKey: 'users:read' },
     })).status).toBe(404);
 
-    const withPermission = await request('/staff/roles/'+key, { headers: auth });
+    const withPermission = await request('/backoffice/roles/'+key, { headers: auth });
     expect(withPermission.body).toMatchObject({ permissions: ['users:read'] });
 
-    const assign = await request('/staff/users/'+registered.id+'/roles', {
+    const assign = await request('/backoffice/users/'+registered.id+'/roles', {
       method: 'POST', headers: auth, body: { roleKey: key },
     });
     expect(assign.status).toBe(200);
@@ -303,27 +312,27 @@ run('Nest HTTP opinionated preset (real PostgreSQL)', () => {
     expect(withRole.status).toBe(200);
     expect(withRole.body.roles).toContain(key);
     expect(withRole.body.permissions).toContain('users:read');
-    expect((await request('/staff/users', { headers: genericAuth })).status).toBe(200);
+    expect((await request('/backoffice/users', { headers: genericAuth })).status).toBe(200);
 
-    const removed = await request('/staff/users/'+registered.id+'/roles/'+key, {
+    const removed = await request('/backoffice/users/'+registered.id+'/roles/'+key, {
       method: 'DELETE', headers: auth,
     });
     expect(removed.status).toBe(200);
     const afterRemoval = await request('/auth/me', { headers: genericAuth });
     expect(afterRemoval.body.roles).not.toContain(key);
     expect(afterRemoval.body.permissions).not.toContain('users:read');
-    expect((await request('/staff/users', { headers: genericAuth })).status).toBe(403);
+    expect((await request('/backoffice/users', { headers: genericAuth })).status).toBe(403);
 
-    expect((await request('/staff/roles/'+key+'/permissions/users:read', {
+    expect((await request('/backoffice/roles/'+key+'/permissions/users:read', {
       method: 'DELETE', headers: auth,
     })).status).toBe(200);
-    expect((await request('/staff/roles/'+key, { headers: auth })).body.permissions).toEqual([]);
-    expect((await request('/staff/roles/admin/permissions/users:read', {
+    expect((await request('/backoffice/roles/'+key, { headers: auth })).body.permissions).toEqual([]);
+    expect((await request('/backoffice/roles/admin/permissions/users:read', {
       method: 'DELETE', headers: auth,
     })).status).toBe(409);
-    expect((await request('/staff/roles/admin', { method: 'DELETE', headers: auth })).status).toBe(409);
-    expect((await request('/staff/roles/'+key, { method: 'DELETE', headers: auth })).status).toBe(200);
-    expect((await request('/staff/roles/'+key, { headers: auth })).status).toBe(404);
+    expect((await request('/backoffice/roles/admin', { method: 'DELETE', headers: auth })).status).toBe(409);
+    expect((await request('/backoffice/roles/'+key, { method: 'DELETE', headers: auth })).status).toBe(200);
+    expect((await request('/backoffice/roles/'+key, { headers: auth })).status).toBe(404);
   });
 
   it('returns RFC 9457 with Retry-After on brute-force attempts', async () => {

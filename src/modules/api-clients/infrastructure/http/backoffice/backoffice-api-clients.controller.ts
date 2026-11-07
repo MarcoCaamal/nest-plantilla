@@ -8,9 +8,9 @@ import type { UserPrincipal } from '@/shared/domain/auth/principal';
 import { CreateApiClientUseCase } from '../../../application/use-cases/create-api-client.use-case';
 import { CreateApiClientDto } from './schemas/create-api-client.schema';
 
-@Controller('staff/api-clients')
+@Controller('backoffice/api-clients')
 @UseGuards(UserAuthenticationGuard, GateGuard)
-export class StaffApiClientsController {
+export class BackofficeApiClientsController {
   constructor(private readonly createClient: CreateApiClientUseCase) {}
 
   @Post()

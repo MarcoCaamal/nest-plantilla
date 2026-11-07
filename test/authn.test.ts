@@ -14,7 +14,7 @@ import { ApiKeyVerifierPort, AuthenticateApiClientUseCase } from '@/modules/api-
 const user: UserPrincipal = {
   id: 'user-01',
   type: 'USER',
-  roles: ['staff'],
+  roles: ['operator'],
   permissions: ['orders:read'],
   attributes: { tenantId: 'tenant-01' },
 };
@@ -122,7 +122,7 @@ describe('immutable principal snapshots', () => {
     const input = {
       id: 'user-test',
       type: 'USER' as const,
-      roles: ['staff'],
+      roles: ['operator'],
       permissions: ['orders:read'],
       attributes: { tenantIds: ['tenant-01'], details: { flags: ['one'] } },
     };

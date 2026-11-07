@@ -18,7 +18,7 @@ src/
         ├── domain/{entities,value-objects,policies,ports,errors}
         ├── application/{use-cases,services,ports}
         └── infrastructure/
-            ├── http/{client,staff,partner-b2b,mappers}
+            ├── http/{client,backoffice,partner-b2b,mappers}
             ├── persistence/{models,mappers}
             ├── adapters/
             └── webhooks/
@@ -58,13 +58,13 @@ Este ejemplo **no es parte de la plantilla**: no existe ningún adapter ni puert
 
 NestJS 12 tiene integración Standard Schema nativa. Usar:
 ```typescript
-// infrastructure/http/staff/schemas/create-order.schema.ts
+// infrastructure/http/backoffice/schemas/create-order.schema.ts
 export const CreateOrderDto = createZodDto(
   z.object({ code: z.string().min(1).meta({ description: 'Order code' }) }),
 );
 export type CreateOrderDto = ZodDtoOutput<typeof CreateOrderDto>;
 
-// infrastructure/http/staff/staff-orders.controller.ts
+// infrastructure/http/backoffice/backoffice-orders.controller.ts
 @Post()
 create(@Body({ schema: CreateOrderDto.schema }) dto: CreateOrderDto) {
   const input = OrderHttpMapper.toCreateInput(dto);

@@ -14,10 +14,10 @@ import {
   UsersQueryDto, AssignRoleDto, CreateRoleDto, UpdateRoleDto, GrantPermissionDto,
 } from './schemas/users.schema';
 
-/** The staff prefix is an HTTP audience only: every principal remains a generic User. */
-@Controller('staff/users')
+/** The backoffice prefix is an HTTP audience only: every principal remains a generic User. */
+@Controller('backoffice/users')
 @UseGuards(UserAuthenticationGuard, GateGuard)
-export class StaffUsersController {
+export class BackofficeUsersController {
   constructor(
     private readonly listUsers: ListUsersUseCase,
     private readonly manage: ManageRbacUseCase,
@@ -55,9 +55,9 @@ export class StaffUsersController {
   }
 }
 
-@Controller('staff/roles')
+@Controller('backoffice/roles')
 @UseGuards(UserAuthenticationGuard, GateGuard)
-export class StaffRolesController {
+export class BackofficeRolesController {
   constructor(
     private readonly read: ReadRbacUseCase,
     private readonly manage: ManageRbacUseCase,
@@ -131,9 +131,9 @@ export class StaffRolesController {
 }
 
 /** Immutable, code-seeded permission catalog: deliberately no write endpoints. */
-@Controller('staff/permissions')
+@Controller('backoffice/permissions')
 @UseGuards(UserAuthenticationGuard, GateGuard)
-export class StaffPermissionsController {
+export class BackofficePermissionsController {
   constructor(private readonly read: ReadRbacUseCase) {}
 
   @Get()

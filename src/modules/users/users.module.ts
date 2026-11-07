@@ -10,12 +10,12 @@ import { IdGeneratorPort } from '@/shared/application/ports/id-generator.port';
 import { UnitOfWorkPort } from '@/shared/application/ports/unit-of-work.port';
 import { UsersPersistenceModule } from './infrastructure/persistence/users-persistence.module';
 import {
-  StaffUsersController, StaffRolesController, StaffPermissionsController,
-} from './infrastructure/http/staff/users.controller';
+  BackofficeUsersController, BackofficeRolesController, BackofficePermissionsController,
+} from './infrastructure/http/backoffice/users.controller';
 
 @Module({
   imports: [UsersPersistenceModule],
-  controllers: [StaffUsersController, StaffRolesController, StaffPermissionsController],
+  controllers: [BackofficeUsersController, BackofficeRolesController, BackofficePermissionsController],
   providers: [
     UsersPolicy,
     {

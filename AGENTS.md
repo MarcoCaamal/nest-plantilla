@@ -7,7 +7,7 @@ Este repositorio es una plantilla **agnóstica a proveedores** de NestJS 12+, Ty
 - `shared/domain`: solo importa `shared/domain` y `shared/core`. No NestJS, Zod, Node API, ORM, HTTP ni infraestructura.
 - `modules/<feature>/domain`: importa solo su dominio, `shared/core`, `shared/domain`. Entidades, políticas, servicios puros y puertos de repositorio.
 - `application`: importa su dominio/aplicación y `shared/*` agnóstico; nunca ORM, NestJS o HTTP. Los casos de uso NO llevan @Injectable, conectar con factory providers en módulos.
-- `infrastructure`: implementa adaptadores, HTTP y wiring DI. Controladores separados por audiencia `client`, `staff`, `partner-b2b`; cada audiencia con seguridad y schemas propios.
+- `infrastructure`: implementa adaptadores, HTTP y wiring DI. Controladores separados por audiencia `client`, `backoffice`, `partner-b2b`; cada audiencia con seguridad y schemas propios.
 - Otros módulos solo consumen el `public.ts` autorizado, nunca archivos internos.
 
 ## Errores y transacciones

@@ -78,7 +78,7 @@ class FixtureUserVerifier extends UserCredentialVerifierPort {
     const principal: UserPrincipal = {
       id: 'user-99',
       type: 'USER',
-      roles: ['staff'],
+      roles: ['operator'],
       permissions: token === 'verified' ? ['records:read'] : [],
       attributes: {},
     };

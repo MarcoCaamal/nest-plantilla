@@ -33,7 +33,7 @@ repositorio. No impongas un método de verificación dentro del Caso de Uso.
       // imports: [SecretsModule, SessionModule], // solo si tu adaptador los necesita
     }),
   ],
-  controllers: [StaffOrdersController],
+  controllers: [BackofficeOrdersController],
 })
 export class OrdersModule {}
 ```
@@ -45,9 +45,9 @@ módulos dinámicos, pero **no se registran globalmente** ni se inyectan
 verificadores falsos en producción.
 
 ```typescript
-@Controller('ops/orders')
+@Controller('backoffice/orders')
 @UseGuards(UserAuthenticationGuard, GateGuard) // orden obligatorio
-export class StaffOrdersController {
+export class BackofficeOrdersController {
   @Get()
   @Authorize('orders:read')
   list(@CurrentPrincipal() principal: UserPrincipal) { /* ... */ }

@@ -19,7 +19,7 @@ async function main(): Promise<void> {
   await prisma.$transaction(async (tx) => {
     const adminRole = await tx.role.upsert({
       where: { key: 'admin' },
-      create: { id: v7(), key: 'admin', name: 'Administrator', description: 'Full staff access' },
+      create: { id: v7(), key: 'admin', name: 'Administrator', description: 'Full backoffice access' },
       update: {},
     });
     for (const key of permissions) {

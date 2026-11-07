@@ -53,7 +53,7 @@ Domain and application code do not import Nest, Prisma, Zod, JWT, Argon2, Pino, 
 
 **Transactions:** Result.ok commits; Result.err rolls back; technical exceptions rethrow after rollback. afterCommit runs only after a successful commit. Nested UoW calls share a transaction. PrismaHost.client returns the current transaction client from ALS or the root client automatically, with no Prisma arguments in use cases. The outbox adapter refuses to append outside an active transaction.
 
-**Authorization:** staff endpoints use UserAuthenticationGuard **before** GateGuard with the existing Authorize decorator. AccessScope comes from a pure ResourcePolicy, and scopedPrismaWhere() combines scope and caller filters using AND only, never OR. All expected errors map through HttpResult and RFC 9457.
+**Authorization:** backoffice endpoints use UserAuthenticationGuard **before** GateGuard with the existing Authorize decorator. AccessScope comes from a pure ResourcePolicy, and scopedPrismaWhere() combines scope and caller filters using AND only, never OR. All expected errors map through HttpResult and RFC 9457.
 
 ## Identity API
 
@@ -70,28 +70,30 @@ The JWT adapter requires HS256 signature, issuer, audience, expiration and valid
 
 ### Users, roles and immutable permissions
 
-There is **only one generic `User` model**. There is no StaffUser entity, discriminator or separate staff account type. `admin` is a normal role assigned to a normal User through `UserRole`; the `/staff/*` prefix is an HTTP **audience**, not a type of user. Authorization checks the user's live role-permission assignments in PostgreSQL on each authenticated request, so modifications take effect without issuing a new JWT.
+**HTTP breaking change:** the former `/staff/*` endpoints were renamed to `/backoffice/*` without aliases. Update API consumers and any frontend/proxy paths. This changes routing and folder/controller names only: the generic `User`, `admin` role, and RBAC permission keys remain unchanged.
 
-**Permission keys are a code/seed-managed catalog. The HTTP API is strictly read-only for permissions**: there are no `POST`, `PATCH`, `PUT` or `DELETE` routes under `/staff/permissions`. New capabilities are added to the seed and permissions are assigned/revoked **on roles**, not created dynamically over HTTP.
+There is **only one generic `User` model**. There is no BackofficeUser entity, discriminator or separate backoffice account type. `admin` is a normal role assigned to a normal User through `UserRole`; the `/backoffice/*` prefix is an HTTP **audience**, not a type of user. Authorization checks the user's live role-permission assignments in PostgreSQL on each authenticated request, so modifications take effect without issuing a new JWT.
+
+**Permission keys are a code/seed-managed catalog. The HTTP API is strictly read-only for permissions**: there are no `POST`, `PATCH`, `PUT` or `DELETE` routes under `/backoffice/permissions`. New capabilities are added to the seed and permissions are assigned/revoked **on roles**, not created dynamically over HTTP.
 
 | Method | Route | Required permission | Purpose |
 | --- | --- | --- | --- |
-| GET | `/staff/permissions` | `permissions:read` | List the permission catalog (sorted by key) |
-| GET | `/staff/permissions/:key` | `permissions:read` | Read an existing permission |
-| GET | `/staff/roles` | `roles:read` | List roles with their permission keys |
-| GET | `/staff/roles/:key` | `roles:read` | Get role by stable key |
-| POST | `/staff/roles` | `roles:write` | Create a role (`key`, `name`, optional `description`) |
-| PATCH | `/staff/roles/:key` | `roles:write` | Edit role name/description (key is immutable) |
-| DELETE | `/staff/roles/:key` | `roles:write` | Delete role; cascades memberships and grants |
-| POST | `/staff/roles/:key/permissions` | `roles:write` | Grant a catalog permission with `{ "permissionKey": "users:read" }` |
-| DELETE | `/staff/roles/:key/permissions/:permissionKey` | `roles:write` | Revoke permission from a role |
-| GET | `/staff/users` | `users:read` | Paginated generic users, including roles/permissions |
-| POST | `/staff/users/:id/roles` | `users:write` | Assign role to generic user with `{ "roleKey": "admin" }` |
-| DELETE | `/staff/users/:id/roles/:roleKey` | `users:write` | Revoke a user's role |
+| GET | `/backoffice/permissions` | `permissions:read` | List the permission catalog (sorted by key) |
+| GET | `/backoffice/permissions/:key` | `permissions:read` | Read an existing permission |
+| GET | `/backoffice/roles` | `roles:read` | List roles with their permission keys |
+| GET | `/backoffice/roles/:key` | `roles:read` | Get role by stable key |
+| POST | `/backoffice/roles` | `roles:write` | Create a role (`key`, `name`, optional `description`) |
+| PATCH | `/backoffice/roles/:key` | `roles:write` | Edit role name/description (key is immutable) |
+| DELETE | `/backoffice/roles/:key` | `roles:write` | Delete role; cascades memberships and grants |
+| POST | `/backoffice/roles/:key/permissions` | `roles:write` | Grant a catalog permission with `{ "permissionKey": "users:read" }` |
+| DELETE | `/backoffice/roles/:key/permissions/:permissionKey` | `roles:write` | Revoke permission from a role |
+| GET | `/backoffice/users` | `users:read` | Paginated generic users, including roles/permissions |
+| POST | `/backoffice/users/:id/roles` | `users:write` | Assign role to generic user with `{ "roleKey": "admin" }` |
+| DELETE | `/backoffice/users/:id/roles/:roleKey` | `users:write` | Revoke a user's role |
 
 Role creation conflicts return 409. Missing roles/permissions return 404; unauthorized access returns 401/403. The built-in `admin` role cannot be deleted or have permissions revoked via the API. Removing the final user assigned `admin` is rejected with 409 (and serialized with a database row lock). Role assignment and permission grants are idempotent. The seed remains the recovery path for provisioning administrator capabilities.
 
-M2M: POST /staff/api-clients provisions an API key (the raw key is shown **once**, only in the HTTP response). GET /partner-b2b/whoami requires X-API-Key and returns an authenticated MachinePrincipal. Bearer and X-API-Key are not mixed.
+M2M: POST /backoffice/api-clients provisions an API key (the raw key is shown **once**, only in the HTTP response). GET /partner-b2b/whoami requires X-API-Key and returns an authenticated MachinePrincipal. Bearer and X-API-Key are not mixed.
 
 ## Emails, retries and operational guarantees
 
