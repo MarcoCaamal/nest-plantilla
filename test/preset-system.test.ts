@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { validate as validateUuid, version as uuidVersion } from 'uuid';
 import { UuidV7Generator } from '@/shared/infrastructure/system/uuid-v7-generator';
-import { Argon2PasswordHasherAdapter } from '@/shared/infrastructure/security/argon2-password-hasher.adapter';
+import { Argon2PasswordHasherAdapter } from '@/modules/auth/infrastructure/security/argon2-password-hasher.adapter';
 import { parseEnv, EnvironmentValidationError } from '@/shared/infrastructure/config/app-config';
 import { presetEnvSchema } from '@/shared/infrastructure/config/env.schema';
 import { scopedPrismaWhere } from '@/shared/infrastructure/persistence/scoped-prisma-where';

@@ -62,7 +62,7 @@ Domain and application code do not import Nest, Prisma, Zod, JWT, Argon2, Pino, 
 - POST /auth/login: checks Argon2id; emits short-lived JWT and opaque refresh token. Only SHA-256 refresh hashes are persisted.
 - POST /auth/refresh: atomically rotates refresh; reuse of a previously rotated token revokes the **entire family** for that device, committed before returning an error.
 - POST /auth/logout, POST /auth/logout-all: revoke one or every active session.
-- GET /auth/me: Bearer required, active DB session and active user required.
+- GET /me: Bearer required; exposes the generic user profile without password hashes. PATCH /me updates optional displayName; POST /me/change-password verifies the current password and revokes all active sessions. The old /auth/me route has been removed.
 - POST /auth/forgot-password: non-enumerating response; outbox email for active accounts.
 - POST /auth/reset-password: one-hour single-use token; changes hash and revokes all sessions.
 
@@ -88,6 +88,9 @@ There is **only one generic `User` model**. There is no BackofficeUser entity, d
 | POST | `/backoffice/roles/:key/permissions` | `roles:write` | Grant a catalog permission with `{ "permissionKey": "users:read" }` |
 | DELETE | `/backoffice/roles/:key/permissions/:permissionKey` | `roles:write` | Revoke permission from a role |
 | GET | `/backoffice/users` | `users:read` | Paginated generic users, including roles/permissions |
+| GET | `/backoffice/users/:id` | `users:read` | User details, excluding password hash |
+| POST | `/backoffice/users` | `users:write` | Provision an active generic account with email/password and optional displayName |
+| PATCH | `/backoffice/users/:id/status` | `users:write` | Activate/suspend user; suspension revokes sessions (self/admin suspension disallowed) |
 | POST | `/backoffice/users/:id/roles` | `users:write` | Assign role to generic user with `{ "roleKey": "admin" }` |
 | DELETE | `/backoffice/users/:id/roles/:roleKey` | `users:write` | Revoke a user's role |
 
@@ -131,3 +134,9 @@ TEST_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5433/nest_plantilla_t
 ~~~
 
 test/preset-system.test.ts covers UUID v7, Argon2id, env and scope AND; test/preset-throttler-http.test.ts verifies `@nestjs/throttler` in HTTP with RFC 9457 and Retry-After. test/preset-integration.test.ts runs only with TEST_DATABASE_URL and verifies transaction commit/rollback, registration -> outbox -> email -> verification -> login -> JWT -> refresh -> family revocation on reuse, plus scoped pagination. Run integration tests only against a disposable dedicated test database; never against production.
+
+## Modules and migration
+
+The architectural ownership and complete file layout are in [MODULE_STRUCTURE.md](MODULE_STRUCTURE.md). This separation is an intentional HTTP breaking change for `GET /auth/me`: the self-service endpoint is now `GET /me`. New routes are `PATCH /me`, `POST /me/change-password`, `POST /backoffice/users`, `GET /backoffice/users/:id` and `PATCH /backoffice/users/:id/status`. Existing `/auth/login`, `/auth/refresh`, `/auth/register`, reset, logout, RBAC and M2M routes retain their behavior.
+
+A new **additive migration** `20261107230000_add_user_display_name` adds nullable `users.display_name`; apply `pnpm db:migrate` and `pnpm db:generate` before starting the updated API. It does not change existing user IDs, passwords, role membership or status. Email is intentionally not mutable via `/me`; changing it requires a verified identity flow. Administrator-created accounts are active immediately and require an initial secret supplied at creation; handle distribution and initial credential rotation securely.

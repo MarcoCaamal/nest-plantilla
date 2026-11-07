@@ -2,7 +2,7 @@ import { Global, Module } from '@nestjs/common';
 import { AuthModule } from './auth.module';
 import { UserCredentialVerifierPort } from './application/ports/user-credential-verifier.port';
 import { AuthInfrastructureModule } from './infrastructure/auth-infrastructure.module';
-import { JwtUserCredentialVerifierAdapter } from './infrastructure/adapters/jwt-user-credential-verifier.adapter';
+import { JwtUserCredentialVerifierAdapter } from './infrastructure/security/jwt-user-credential-verifier.adapter';
 
 @Global()
 @Module({

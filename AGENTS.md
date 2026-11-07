@@ -5,10 +5,13 @@ Este repositorio es una plantilla **agnóstica a proveedores** de NestJS 12+, Ty
 ## Dependencias y estructura
 - `shared/core`: no importa dependencias; contiene tipos y utilidades puras como `Result`.
 - `shared/domain`: solo importa `shared/domain` y `shared/core`. No NestJS, Zod, Node API, ORM, HTTP ni infraestructura.
-- `modules/<feature>/domain`: importa solo su dominio, `shared/core`, `shared/domain`. Entidades, políticas, servicios puros y puertos de repositorio.
-- `application`: importa su dominio/aplicación y `shared/*` agnóstico; nunca ORM, NestJS o HTTP. Los casos de uso NO llevan @Injectable, conectar con factory providers en módulos.
-- `infrastructure`: implementa adaptadores, HTTP y wiring DI. Controladores separados por audiencia `client`, `backoffice`, `partner-b2b`; cada audiencia con seguridad y schemas propios.
+- `modules/<feature>/domain`: importa solo su dominio, `shared/core`, `shared/domain`. Entidades, errores y políticas puras. Los puertos de repositorio de `auth`, `users` e `iam` viven en `application/ports` para no contaminar dominio.
+- `application`: importa su dominio/aplicación, los `public.ts` de otros módulos y `shared/*` agnóstico; nunca ORM, NestJS o HTTP. Los casos de uso NO llevan @Injectable, conectar con factory providers en módulos.
+- `infrastructure`: implementa adaptadores, HTTP y wiring DI. Controladores separados por audiencia `public`, `self`, `backoffice`, `partner-b2b`; cada audiencia con seguridad y schemas propios.
 - Otros módulos solo consumen el `public.ts` autorizado, nunca archivos internos.
+- **Bounded contexts del preset:** `auth` posee credenciales, sesiones y tokens; `users` posee cuentas genéricas, perfil propio y administración de usuarios; `iam` posee catálogo de roles y permisos. No colocar casos de uso ni controladores de IAM en `users`.
+- **Permisos:** `backoffice/permissions` tiene solo operaciones `GET`; el catálogo se aprovisiona por seed. Asignar y revocar permisos a roles ocurre en `iam`, sin endpoints CRUD de permisos.
+- **Usuarios:** no introducir StaffUser ni BackofficeUser; se usa un `User` con roles, entre ellos `admin`.
 
 ## Errores y transacciones
 - Los errores esperados retornan `Result<T,E>`; NO usar `throw` para negocio en domain/application.

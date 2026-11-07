@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import { randomUUID } from 'node:crypto';
 import { UuidV7Generator } from '@/shared/infrastructure/system/uuid-v7-generator';
-import { Argon2PasswordHasherAdapter } from '@/shared/infrastructure/security/argon2-password-hasher.adapter';
+import { Argon2PasswordHasherAdapter } from '@/modules/auth/infrastructure/security/argon2-password-hasher.adapter';
 import {
   Module, StandardSchemaValidationPipe, type INestApplication,
 } from '@nestjs/common';
@@ -18,6 +18,7 @@ import { OutboxModule } from '@/shared/infrastructure/outbox/outbox.module';
 import { JwtAuthnModule } from '@/modules/auth/jwt-authn.module';
 import { AuthPresetModule } from '@/modules/auth/auth-preset.module';
 import { ApiClientsPresetModule } from '@/modules/api-clients/api-clients-preset.module';
+import { IamModule } from '@/modules/iam/public';
 import { GlobalExceptionFilter } from '@/shared/infrastructure/http/filters/global-exception.filter';
 import { HttpResultInterceptor } from '@/shared/infrastructure/http/interceptors/http-result.interceptor';
 
@@ -34,6 +35,9 @@ run('Nest HTTP opinionated preset (real PostgreSQL)', () => {
   let backofficeUserId: string | undefined;
   let backofficeRoleId: string | undefined;
   let apiClientId: string | undefined;
+  let createdUserId: string | undefined;
+  let backofficeToken: string | undefined;
+  let genericToken: string | undefined;
 
   async function request(
     path: string,
@@ -62,7 +66,7 @@ run('Nest HTTP opinionated preset (real PostgreSQL)', () => {
     Module({
       imports: [
         AppModule, ConfigModule.register(config), PrismaModule, PresetSystemModule,
-        PresetSecurityModule, OutboxModule, JwtAuthnModule, AuthPresetModule, ApiClientsPresetModule,
+        PresetSecurityModule, OutboxModule, JwtAuthnModule, AuthPresetModule, IamModule, ApiClientsPresetModule,
       ],
     })(TestPresetApp);
     app = await NestFactory.create(TestPresetApp, { logger: false });
@@ -85,6 +89,7 @@ run('Nest HTTP opinionated preset (real PostgreSQL)', () => {
         await prisma.user.deleteMany({ where: { id: user.id } });
       }
       if (apiClientId) await prisma.apiClient.deleteMany({ where: { id: apiClientId } });
+      if (createdUserId) await prisma.user.deleteMany({ where: { id: createdUserId } });
       if (backofficeUserId) await prisma.user.deleteMany({ where: { id: backofficeUserId } });
       if (backofficeRoleId) await prisma.role.deleteMany({ where: { id: backofficeRoleId } });
       await prisma.role.deleteMany({ where: { key: 'http-rbac-'+id } });
@@ -138,7 +143,7 @@ run('Nest HTTP opinionated preset (real PostgreSQL)', () => {
     expect(login.body).toMatchObject({ tokenType: 'Bearer', expiresIn: 900 });
     expect(typeof login.body.accessToken).toBe('string');
 
-    const me = await request('/auth/me', {
+    const me = await request('/me', {
       headers: { Authorization: 'Bearer ' + login.body.accessToken },
     });
     expect(me.status).toBe(200);
@@ -159,7 +164,7 @@ run('Nest HTTP opinionated preset (real PostgreSQL)', () => {
     expect(replay.status).toBe(401);
     expect(replay.body).toMatchObject({ code: 'AUTHENTICATION_FAILED' });
 
-    const invalidNewToken = await request('/auth/me', {
+    const invalidNewToken = await request('/me', {
       headers: { Authorization: 'Bearer ' + rotated.body.accessToken },
     });
     expect(invalidNewToken.status).toBe(401);
@@ -237,6 +242,7 @@ run('Nest HTTP opinionated preset (real PostgreSQL)', () => {
     });
     expect(backofficeLogin.status).toBe(200);
     const adminToken = backofficeLogin.body.accessToken as string;
+    backofficeToken = adminToken;
     const auth = { Authorization: 'Bearer ' + adminToken };
     const registered = await prisma.user.findUniqueOrThrow({ where: { email } });
 
@@ -262,6 +268,7 @@ run('Nest HTTP opinionated preset (real PostgreSQL)', () => {
       method: 'POST', body: { email, password },
     });
     expect(genericLogin.status).toBe(200);
+    genericToken = genericLogin.body.accessToken as string;
     const genericAuth = { Authorization: 'Bearer ' + genericLogin.body.accessToken };
     expect((await request('/backoffice/permissions', { headers: genericAuth })).status).toBe(403);
     expect((await request('/backoffice/roles', { headers: genericAuth })).status).toBe(403);
@@ -308,7 +315,7 @@ run('Nest HTTP opinionated preset (real PostgreSQL)', () => {
       method: 'POST', headers: auth, body: { roleKey: key },
     });
     expect(assign.status).toBe(200);
-    const withRole = await request('/auth/me', { headers: genericAuth });
+    const withRole = await request('/me', { headers: genericAuth });
     expect(withRole.status).toBe(200);
     expect(withRole.body.roles).toContain(key);
     expect(withRole.body.permissions).toContain('users:read');
@@ -318,7 +325,7 @@ run('Nest HTTP opinionated preset (real PostgreSQL)', () => {
       method: 'DELETE', headers: auth,
     });
     expect(removed.status).toBe(200);
-    const afterRemoval = await request('/auth/me', { headers: genericAuth });
+    const afterRemoval = await request('/me', { headers: genericAuth });
     expect(afterRemoval.body.roles).not.toContain(key);
     expect(afterRemoval.body.permissions).not.toContain('users:read');
     expect((await request('/backoffice/users', { headers: genericAuth })).status).toBe(403);
@@ -333,6 +340,62 @@ run('Nest HTTP opinionated preset (real PostgreSQL)', () => {
     expect((await request('/backoffice/roles/admin', { method: 'DELETE', headers: auth })).status).toBe(409);
     expect((await request('/backoffice/roles/'+key, { method: 'DELETE', headers: auth })).status).toBe(200);
     expect((await request('/backoffice/roles/'+key, { headers: auth })).status).toBe(404);
+  });
+
+  it('supports self-service profile changes and revokes sessions after password rotation', async () => {
+    const auth = { Authorization: 'Bearer ' + genericToken! };
+    expect((await request('/auth/me', { headers: auth })).status).toBe(404);
+    const profile = await request('/me', { headers: auth });
+    expect(profile.status).toBe(200);
+    expect(profile.body).toMatchObject({ email, status: 'ACTIVE', displayName: null });
+    expect('passwordHash' in profile.body).toBe(false);
+    expect((await request('/me', { method: 'PATCH', headers: auth, body: {
+      displayName: 'Example', roles: ['admin'],
+    } })).status).toBe(400);
+    const updated = await request('/me', {
+      method: 'PATCH', headers: auth, body: { displayName: 'Generic User' },
+    });
+    expect(updated.status).toBe(200);
+    expect(updated.body.displayName).toBe('Generic User');
+    expect('passwordHash' in updated.body).toBe(false);
+    expect((await request('/me/change-password', {
+      method: 'POST', headers: auth, body: {
+        currentPassword: 'not-correct', newPassword: 'Updated-Password-Long-2026',
+      },
+    })).status).toBe(401);
+    const correct = await request('/me/change-password', {
+      method: 'POST', headers: auth, body: {
+        currentPassword: password, newPassword: 'Updated-Password-Long-2026',
+      },
+    });
+    expect(correct.status).toBe(200);
+    expect((await request('/me', { headers: auth })).status).toBe(401);
+    const persisted = await prisma.user.findUniqueOrThrow({ where: { email } });
+    const hasher = new Argon2PasswordHasherAdapter();
+    expect(await hasher.verify(persisted.passwordHash, 'Updated-Password-Long-2026')).toBe(true);
+    expect(await hasher.verify(persisted.passwordHash, password)).toBe(false);
+  });
+
+  it('provisions generic backoffice accounts and changes their status', async () => {
+    const auth = { Authorization: 'Bearer ' + backofficeToken! };
+    const created = await request('/backoffice/users', {
+      method: 'POST', headers: auth, body: {
+        email: 'provisioned-'+id+'@example.test',
+        password: 'Secure-Temporary-Account-2026', displayName: 'Provisioned User',
+      },
+    });
+    expect(created.status).toBe(201);
+    createdUserId = created.body.id as string;
+    expect(created.body.displayName).toBe('Provisioned User');
+    expect('passwordHash' in created.body).toBe(false);
+    expect((await request('/backoffice/users/'+createdUserId, { headers: auth })).status).toBe(200);
+    const suspended = await request('/backoffice/users/'+createdUserId+'/status', {
+      method: 'PATCH', headers: auth, body: { status: 'SUSPENDED' },
+    });
+    expect(suspended.body.status).toBe('SUSPENDED');
+    expect((await request('/backoffice/users/'+backofficeUserId+'/status', {
+      method: 'PATCH', headers: auth, body: { status: 'SUSPENDED' },
+    })).status).toBe(409);
   });
 
   it('returns RFC 9457 with Retry-After on brute-force attempts', async () => {

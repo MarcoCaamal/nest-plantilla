@@ -18,7 +18,7 @@ src/
         ├── domain/{entities,value-objects,policies,ports,errors}
         ├── application/{use-cases,services,ports}
         └── infrastructure/
-            ├── http/{client,backoffice,partner-b2b,mappers}
+            ├── http/{public,self,backoffice,partner-b2b,mappers}
             ├── persistence/{models,mappers}
             ├── adapters/
             └── webhooks/
@@ -146,3 +146,7 @@ ni políticas de negocio genéricas para recursos inexistentes.
 ## Readiness opcional
 
 `shared/infrastructure/health` ofrece `ReadinessCheckPort`, `ReadinessService` y `ReadinessModule.register()`, con checks reales, timeouts individuales, cancelación cooperativa, 503 RFC 9457 y transición a `not_ready` durante shutdown. No es parte del `AppModule` por defecto. Ver [READINESS.md](READINESS.md).
+
+## Bounded contexts del preset `preset/opinionated`
+
+La estructura específica del preset (sin forzar proveedores sobre `main`) está descrita en [MODULE_STRUCTURE.md](MODULE_STRUCTURE.md). `auth` gestiona sesiones, tokens, credenciales y recuperación; `users` gestiona cuentas genéricas, el perfil propio (`/me`) y cuentas desde `backoffice`; `iam` gestiona roles y permisos. Puertos de repositorio en `application/ports`, entidades y políticas en dominio, y Prisma/Nest/Argon2/JWT solo en infraestructura.

@@ -19,6 +19,7 @@ import { OutboxModule } from './shared/infrastructure/outbox/outbox.module';
 import { AuthPresetModule } from './modules/auth/auth-preset.module';
 import { JwtAuthnModule } from './modules/auth/jwt-authn.module';
 import { ApiClientsPresetModule } from './modules/api-clients/api-clients-preset.module';
+import { IamModule } from './modules/iam/public';
 
 export async function bootstrap(): Promise<INestApplication> {
   // Validate before constructing Nest or opening network ports.
@@ -28,7 +29,7 @@ export async function bootstrap(): Promise<INestApplication> {
     service: config.get('SERVICE_NAME'),
   });
 
-  @Module({ imports: [AppModule, ConfigModule.register(config), PrismaModule, PresetSystemModule, PresetSecurityModule, OutboxModule, JwtAuthnModule, AuthPresetModule, ApiClientsPresetModule] })
+  @Module({ imports: [AppModule, ConfigModule.register(config), PrismaModule, PresetSystemModule, PresetSecurityModule, OutboxModule, JwtAuthnModule, AuthPresetModule, IamModule, ApiClientsPresetModule] })
   class ConfiguredAppModule {}
 
   const app = await NestFactory.create(ConfiguredAppModule, { logger: jsonLogger });

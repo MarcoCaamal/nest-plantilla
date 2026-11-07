@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { UserRepositoryPort, type UserScopeConstraints, type UserFilters } from '../../domain/ports/user-repository.port';
-import type { User, UserStatus } from '../../domain/entities/user';
+import { UserRepositoryPort, type UserScopeConstraints, type UserFilters } from '../../application/ports/user-repository.port';
+import type { User, UserStatus, SafeUser } from '../../domain/entities/user.entity';
 import type { ScopedListQuery } from '@/shared/domain/auth/scoped-list-query';
 import type { PageQuery, PageResult } from '@/shared/core/pagination';
 import { scopedPrismaWhere } from '@/shared/infrastructure/persistence/scoped-prisma-where';
@@ -18,6 +18,7 @@ export class UserPrismaMapper {
     return {
       id: user.id,
       email: user.email,
+      displayName: user.displayName,
       passwordHash: user.passwordHash,
       status: user.status,
       emailVerifiedAt: user.emailVerifiedAt,
@@ -44,8 +45,12 @@ export class PrismaUserRepository extends UserRepositoryPort {
     return found ? UserPrismaMapper.toDomain(found) : null;
   }
 
-  async create(input: Pick<User, 'id' | 'email' | 'passwordHash' | 'status' | 'emailVerifiedAt'>): Promise<void> {
+  async create(input: Pick<User, 'id' | 'email' | 'passwordHash' | 'status' | 'emailVerifiedAt'> & { displayName?: string | null }): Promise<void> {
     await this.host.client.user.create({ data: { ...input } });
+  }
+
+  async updateProfile(id: string, displayName: string | null): Promise<void> {
+    await this.host.client.user.update({ where: { id }, data: { displayName } });
   }
 
   async updatePassword(id: string, passwordHash: string): Promise<void> {
@@ -60,7 +65,7 @@ export class PrismaUserRepository extends UserRepositoryPort {
     await this.host.client.user.update({ where: { id }, data: { emailVerifiedAt: now, status: 'ACTIVE' } });
   }
 
-  async list(query: ScopedListQuery<UserScopeConstraints, UserFilters, PageQuery>): Promise<PageResult<Omit<User, 'passwordHash'>>> {
+  async list(query: ScopedListQuery<UserScopeConstraints, UserFilters, PageQuery>): Promise<PageResult<SafeUser>> {
     const scopeWhere: Prisma.UserWhereInput = query.scope.kind === 'CONSTRAINED'
       ? { id: { in: [...query.scope.constraints.allowedUserIds] } } : {};
     const filterWhere: Prisma.UserWhereInput = query.filters.email

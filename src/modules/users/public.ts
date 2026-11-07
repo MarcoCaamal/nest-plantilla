@@ -1,10 +1,6 @@
 export { UsersModule } from './users.module';
-export { UserRepositoryPort } from './domain/ports/user-repository.port';
-export { RoleRepositoryPort } from './domain/ports/role-repository.port';
-export { PermissionRepositoryPort } from './domain/ports/permission-repository.port';
-export { UsersPolicy } from './domain/policies/users.policy';
-export type { User, UserStatus } from './domain/entities/user';
-export type { RoleInfo, RoleChanges } from './domain/ports/role-repository.port';
-export type { PermissionInfo } from './domain/ports/permission-repository.port';
-export type { UserScopeConstraints, UserFilters } from './domain/ports/user-repository.port';
-export { UsersPersistenceModule } from './infrastructure/persistence/users-persistence.module';
+export { UserRepositoryPort } from './application/ports/user-repository.port';
+export { UserResourcePolicy } from './domain/policies/user-resource.policy';
+export type { User, SafeUser, UserStatus } from './domain/entities/user.entity';
+export type { UserScopeConstraints } from './domain/entities/user-scope';
+export type { UserFilters } from './application/ports/user-repository.port';

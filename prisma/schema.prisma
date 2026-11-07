@@ -27,6 +27,7 @@ enum OutboxStatus {
 model User {
   id              String     @id @db.Uuid
   email           String     @unique @db.VarChar(320)
+  displayName     String?    @map("display_name") @db.VarChar(120)
   passwordHash    String     @map("password_hash")
   status          UserStatus @default(PENDING_VERIFICATION)
   emailVerifiedAt DateTime?  @map("email_verified_at")

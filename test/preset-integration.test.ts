@@ -5,18 +5,22 @@ import { presetEnvSchema, type PresetEnv } from '@/shared/infrastructure/config/
 import { PrismaService } from '@/shared/infrastructure/persistence/prisma.service';
 import { PrismaHost, PrismaUnitOfWork } from '@/shared/infrastructure/persistence/prisma-unit-of-work';
 import { PrismaUserRepository } from '@/modules/users/infrastructure/persistence/prisma-user.repository';
-import { PrismaSessionRepository } from '@/modules/auth/infrastructure/adapters/prisma-session.repository';
-import { PrismaAccountTokenRepository } from '@/modules/auth/infrastructure/adapters/prisma-account-token.repository';
+import { PrismaSessionRepository } from '@/modules/auth/infrastructure/persistence/prisma-session.repository';
+import { PrismaAccountTokenRepository } from '@/modules/auth/infrastructure/persistence/prisma-account-token.repository';
 import { PrismaTransactionalOutboxAdapter } from '@/shared/infrastructure/outbox/prisma-transactional-outbox.adapter';
 import { PrismaOutboxWorker } from '@/shared/infrastructure/outbox/prisma-outbox-worker';
 import { MailSenderPort, type TransactionalMail } from '@/shared/application/ports/mail-sender.port';
-import { Argon2PasswordHasherAdapter } from '@/shared/infrastructure/security/argon2-password-hasher.adapter';
+import { Argon2PasswordHasherAdapter } from '@/modules/auth/infrastructure/security/argon2-password-hasher.adapter';
 import { UuidV7Generator } from '@/shared/infrastructure/system/uuid-v7-generator';
 import { SystemClock } from '@/shared/infrastructure/system/system-clock';
-import { JwtAccessTokenAdapter } from '@/modules/auth/infrastructure/adapters/jwt-access-token.adapter';
-import { JwtUserCredentialVerifierAdapter } from '@/modules/auth/infrastructure/adapters/jwt-user-credential-verifier.adapter';
-import { SecureOpaqueTokenAdapter } from '@/modules/auth/infrastructure/adapters/opaque-token.adapter';
-import { AuthFlows } from '@/modules/auth/application/auth-flows';
+import { JwtTokenAdapter } from '@/modules/auth/infrastructure/security/jwt-token.adapter';
+import { JwtUserCredentialVerifierAdapter } from '@/modules/auth/infrastructure/security/jwt-user-credential-verifier.adapter';
+import { SecureOpaqueTokenAdapter } from '@/modules/auth/infrastructure/security/opaque-token.adapter';
+import { SessionTokenService } from '@/modules/auth/application/services/session-token.service';
+import { RegisterUseCase } from '@/modules/auth/application/use-cases/register.use-case';
+import { VerifyEmailUseCase } from '@/modules/auth/application/use-cases/verify-email.use-case';
+import { LoginWithPasswordUseCase } from '@/modules/auth/application/use-cases/loginWithPassword.use-case';
+import { RefreshSessionUseCase } from '@/modules/auth/application/use-cases/refresh-session.use-case';
 
 const database = process.env.TEST_DATABASE_URL;
 const run = database ? describe : describe.skip;
@@ -34,7 +38,10 @@ run('Prisma + PostgreSQL preset integration', () => {
   let uow: PrismaUnitOfWork;
   let users: PrismaUserRepository;
   let sessions: PrismaSessionRepository;
-  let flows: AuthFlows;
+  let registrationCase: RegisterUseCase;
+  let verifyEmailCase: VerifyEmailUseCase;
+  let loginCase: LoginWithPasswordUseCase;
+  let refreshCase: RefreshSessionUseCase;
   let verifier: JwtUserCredentialVerifierAdapter;
   let worker: PrismaOutboxWorker;
   let mail: SpyMailSender;
@@ -58,12 +65,14 @@ run('Prisma + PostgreSQL preset integration', () => {
     const opaque = new SecureOpaqueTokenAdapter();
     const clock = new SystemClock();
     mail = new SpyMailSender();
-    flows = new AuthFlows(
-      users, sessions, new Argon2PasswordHasherAdapter(), ids, clock, opaque,
-      new JwtAccessTokenAdapter(config), uow,
-      new PrismaTransactionalOutboxAdapter(host, ids),
-      new PrismaAccountTokenRepository(host), 900, 30,
-    );
+    const passwords = new Argon2PasswordHasherAdapter();
+    const oneTime = new PrismaAccountTokenRepository(host);
+    const outbox = new PrismaTransactionalOutboxAdapter(host, ids);
+    const tokens = new SessionTokenService(ids, clock, opaque, new JwtTokenAdapter(config), 900, 30);
+    registrationCase = new RegisterUseCase(users, passwords, ids, clock, opaque, oneTime, outbox, uow);
+    verifyEmailCase = new VerifyEmailUseCase(users, oneTime, opaque, clock, uow);
+    loginCase = new LoginWithPasswordUseCase(users, passwords, ids, sessions, tokens, uow);
+    refreshCase = new RefreshSessionUseCase(users, sessions, opaque, clock, tokens, uow);
     verifier = new JwtUserCredentialVerifierAdapter(config, users, sessions);
     worker = new PrismaOutboxWorker(prisma, mail);
   });
@@ -132,7 +141,7 @@ run('Prisma + PostgreSQL preset integration', () => {
     const idSuffix = ids.generate();
     const email = 'flow-'+idSuffix+'@example.test';
     const password = 'StrongPassword-for-integration-test-27';
-    const registration = await flows.register({ email, password });
+    const registration = await registrationCase.execute({ email, password });
     expect(registration.ok).toBe(true);
     if (!registration.ok) return;
     allocated.push({ id: registration.value.id, email });
@@ -147,25 +156,25 @@ run('Prisma + PostgreSQL preset integration', () => {
       x.mail.kind === 'VERIFY_EMAIL' && x.mail.to === email);
     expect(sent?.mail.kind).toBe('VERIFY_EMAIL');
     if (!sent || sent.mail.kind !== 'VERIFY_EMAIL') return;
-    expect(await flows.verifyEmail(sent.mail.token)).toEqual(Result.ok(undefined));
+    expect(await verifyEmailCase.execute(sent.mail.token)).toEqual(Result.ok(undefined));
     expect((await users.findByEmail(email))?.status).toBe('ACTIVE');
-    const invalidLogin = await flows.login({ email, password: 'bad' });
+    const invalidLogin = await loginCase.execute({ email, password: 'bad' });
     expect(invalidLogin).toEqual(Result.err({ type: 'INVALID_CREDENTIALS' }));
 
-    const login = await flows.login({ email, password });
+    const login = await loginCase.execute({ email, password });
     expect(login.ok).toBe(true);
     if (!login.ok) return;
     expect((await verifier.verify(login.value.accessToken)).ok).toBe(true);
-    const refreshed = await flows.refresh(login.value.refreshToken);
+    const refreshed = await refreshCase.execute(login.value.refreshToken);
     expect(refreshed.ok).toBe(true);
     if (!refreshed.ok) return;
     expect((await verifier.verify(login.value.accessToken)).ok).toBe(false);
     expect((await verifier.verify(refreshed.value.accessToken)).ok).toBe(true);
-    expect(await flows.refresh(login.value.refreshToken)).toEqual(
+    expect(await refreshCase.execute(login.value.refreshToken)).toEqual(
       Result.err({ type: 'REFRESH_REUSED' }),
     );
     expect((await verifier.verify(refreshed.value.accessToken)).ok).toBe(false);
-    expect(await flows.refresh(refreshed.value.refreshToken)).toEqual(
+    expect(await refreshCase.execute(refreshed.value.refreshToken)).toEqual(
       Result.err({ type: 'REFRESH_INVALID' }),
     );
     const output = await prisma.outboxMessage.findUnique({ where: { id: sent.key } });
