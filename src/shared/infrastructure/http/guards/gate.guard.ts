@@ -1,6 +1,7 @@
-import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
+import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import type { Principal } from '@/shared/domain/auth/principal';
+import { PermissionPolicy } from '@/shared/domain/auth/permission-policy';
 import { GATE_RULE_KEY, type GateRule, type HttpGateRequest } from '../decorators/authorize.decorator';
 
 type RequestWithPrincipal = HttpGateRequest & { principal?: Principal };
@@ -18,7 +19,8 @@ export class GateGuard implements CanActivate {
     if (!rule) return true;
     const request = context.switchToHttp().getRequest<RequestWithPrincipal>();
     const actor = request.principal;
-    if (!actor || !actor.permissions.includes(rule.permission)) return false;
+    if (!actor) throw new UnauthorizedException('Authentication required');
+    if (!PermissionPolicy.require(actor, rule.permission).ok) return false;
     return rule.predicate?.(actor, request) ?? true;
   }
 }
