@@ -87,6 +87,7 @@ run('Nest HTTP opinionated preset (real PostgreSQL)', () => {
       if (apiClientId) await prisma.apiClient.deleteMany({ where: { id: apiClientId } });
       if (staffUserId) await prisma.user.deleteMany({ where: { id: staffUserId } });
       if (staffRoleId) await prisma.role.deleteMany({ where: { id: staffRoleId } });
+      await prisma.role.deleteMany({ where: { key: 'http-rbac-'+id } });
       await prisma.idempotencyRecord.deleteMany({ where: { actorId: { startsWith: 'anonymous:' } } });
     }
     if (app) await app.close();
@@ -174,7 +175,7 @@ run('Nest HTTP opinionated preset (real PostgreSQL)', () => {
     await prisma.userRole.create({
       data: { id: generator.generate(), userId: staffUserId, roleId: staffRoleId },
     });
-    for (const key of ['users:read', 'users:write', 'api-clients:write']) {
+    for (const key of ['users:read', 'users:write', 'roles:read', 'roles:write', 'permissions:read', 'api-clients:write']) {
       const permission = await prisma.permission.upsert({
         where: { key },
         create: { id: generator.generate(), key },
@@ -219,6 +220,112 @@ run('Nest HTTP opinionated preset (real PostgreSQL)', () => {
       headers: { Authorization: 'Bearer ' + token },
     })).status).toBe(401);
   });
+  it('manages roles for generic users but exposes permissions through GET only', async () => {
+    const staffLogin = await request('/auth/login', {
+      method: 'POST', body: {
+        email: 'staff-'+id+'@example.test', password: 'TestStaff-Password-Long-2026',
+      },
+    });
+    expect(staffLogin.status).toBe(200);
+    const adminToken = staffLogin.body.accessToken as string;
+    const auth = { Authorization: 'Bearer ' + adminToken };
+    const registered = await prisma.user.findUniqueOrThrow({ where: { email } });
+
+    const permissions = await request('/staff/permissions', { headers: auth });
+    expect(permissions.status).toBe(200);
+    const catalog = permissions.body as unknown as Array<{ id: string; key: string }>;
+    expect(catalog.map((entry) => entry.key)).toContain('roles:write');
+    expect(catalog.map((entry) => entry.key)).toContain('permissions:read');
+    expect(catalog.map((entry) => entry.key)).toEqual([...catalog.map((entry) => entry.key)].sort());
+    const readPermission = await request('/staff/permissions/users:read', { headers: auth });
+    expect(readPermission.status).toBe(200);
+    expect(readPermission.body).toMatchObject({ key: 'users:read' });
+    expect((await request('/staff/permissions/no:such', { headers: auth })).status).toBe(404);
+    for (const method of ['POST', 'PATCH', 'DELETE']) {
+      const rejected = await request('/staff/permissions', {
+        method, headers: auth, body: { key: 'not:createable' },
+      });
+      expect(rejected.status).toBe(404);
+    }
+    expect((await request('/staff/permissions')).status).toBe(401);
+
+    const genericLogin = await request('/auth/login', {
+      method: 'POST', body: { email, password },
+    });
+    expect(genericLogin.status).toBe(200);
+    const genericAuth = { Authorization: 'Bearer ' + genericLogin.body.accessToken };
+    expect((await request('/staff/permissions', { headers: genericAuth })).status).toBe(403);
+    expect((await request('/staff/roles', { headers: genericAuth })).status).toBe(403);
+    expect((await request('/staff/roles', {
+      method: 'POST', headers: genericAuth, body: { key: 'forbidden-role', name: 'Forbidden Role' },
+    })).status).toBe(403);
+
+    const key = 'http-rbac-'+id;
+    const created = await request('/staff/roles', {
+      method: 'POST', headers: auth, body: { key, name: 'Read-only role' },
+    });
+    expect(created.status).toBe(201);
+    expect(created.body).toMatchObject({ key, name: 'Read-only role', permissions: [] });
+    expect((await request('/staff/roles', {
+      method: 'POST', headers: auth, body: { key, name: 'Duplicate role' },
+    })).status).toBe(409);
+
+    const updated = await request('/staff/roles/'+key, {
+      method: 'PATCH', headers: auth,
+      body: { name: 'Updated reader', description: 'Generic user role' },
+    });
+    expect(updated.status).toBe(200);
+    expect(updated.body).toMatchObject({ key, name: 'Updated reader', description: 'Generic user role' });
+    expect((await request('/staff/roles/'+key, {
+      method: 'PATCH', headers: auth, body: {},
+    })).status).toBe(400);
+    expect((await request('/staff/roles/'+key, {
+      method: 'POST', headers: auth, body: { permissionKey: 'unknown:permission' },
+    })).status).toBe(404);
+
+    for (let i = 0; i < 2; i++) {
+      expect((await request('/staff/roles/'+key+'/permissions', {
+        method: 'POST', headers: auth, body: { permissionKey: 'users:read' },
+      })).status).toBe(200);
+    }
+    expect((await request('/staff/roles/unknown-role/permissions', {
+      method: 'POST', headers: auth, body: { permissionKey: 'users:read' },
+    })).status).toBe(404);
+
+    const withPermission = await request('/staff/roles/'+key, { headers: auth });
+    expect(withPermission.body).toMatchObject({ permissions: ['users:read'] });
+
+    const assign = await request('/staff/users/'+registered.id+'/roles', {
+      method: 'POST', headers: auth, body: { roleKey: key },
+    });
+    expect(assign.status).toBe(200);
+    const withRole = await request('/auth/me', { headers: genericAuth });
+    expect(withRole.status).toBe(200);
+    expect(withRole.body.roles).toContain(key);
+    expect(withRole.body.permissions).toContain('users:read');
+    expect((await request('/staff/users', { headers: genericAuth })).status).toBe(200);
+
+    const removed = await request('/staff/users/'+registered.id+'/roles/'+key, {
+      method: 'DELETE', headers: auth,
+    });
+    expect(removed.status).toBe(200);
+    const afterRemoval = await request('/auth/me', { headers: genericAuth });
+    expect(afterRemoval.body.roles).not.toContain(key);
+    expect(afterRemoval.body.permissions).not.toContain('users:read');
+    expect((await request('/staff/users', { headers: genericAuth })).status).toBe(403);
+
+    expect((await request('/staff/roles/'+key+'/permissions/users:read', {
+      method: 'DELETE', headers: auth,
+    })).status).toBe(200);
+    expect((await request('/staff/roles/'+key, { headers: auth })).body.permissions).toEqual([]);
+    expect((await request('/staff/roles/admin/permissions/users:read', {
+      method: 'DELETE', headers: auth,
+    })).status).toBe(409);
+    expect((await request('/staff/roles/admin', { method: 'DELETE', headers: auth })).status).toBe(409);
+    expect((await request('/staff/roles/'+key, { method: 'DELETE', headers: auth })).status).toBe(200);
+    expect((await request('/staff/roles/'+key, { headers: auth })).status).toBe(404);
+  });
+
   it('returns RFC 9457 with Retry-After on brute-force attempts', async () => {
     const attempts: number[] = [];
     for (let i = 0; i < 7; i++) {

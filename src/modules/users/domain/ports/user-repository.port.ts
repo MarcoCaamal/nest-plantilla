@@ -14,4 +14,5 @@ export abstract class UserRepositoryPort {
   abstract verifyEmail(id: string, now: Date): Promise<void>;
   abstract list(query: ScopedListQuery<UserScopeConstraints, UserFilters, PageQuery>): Promise<PageResult<Omit<User, 'passwordHash'>>>;
   abstract assignRole(userId: string, roleKey: string, id: string): Promise<boolean>;
+  abstract removeRole(userId: string, roleKey: string): Promise<'REMOVED' | 'NOT_FOUND' | 'LAST_ADMIN'>;
 }

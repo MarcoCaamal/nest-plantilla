@@ -98,4 +98,26 @@ export class PrismaUserRepository extends UserRepositoryPort {
     });
     return true;
   }
+
+  async removeRole(userId: string, roleKey: string): Promise<'REMOVED' | 'NOT_FOUND' | 'LAST_ADMIN'> {
+    const role = await this.host.client.role.findUnique({ where: { key: roleKey } });
+    if (!role) return 'NOT_FOUND';
+    const link = await this.host.client.userRole.findUnique({
+      where: { userId_roleId: { userId, roleId: role.id } },
+    });
+    if (!link) return 'NOT_FOUND';
+
+    if (roleKey === 'admin') {
+      // Serialize concurrent admin removals on the role row. This method is
+      // invoked inside UnitOfWorkPort.runInTransaction by the application.
+      await this.host.client.$queryRaw`SELECT id FROM roles WHERE key = 'admin' FOR UPDATE`;
+      const adminCount = await this.host.client.userRole.count({ where: { roleId: role.id } });
+      if (adminCount <= 1) return 'LAST_ADMIN';
+    }
+    await this.host.client.userRole.delete({
+      where: { userId_roleId: { userId, roleId: role.id } },
+    });
+    return 'REMOVED';
+  }
+
 }

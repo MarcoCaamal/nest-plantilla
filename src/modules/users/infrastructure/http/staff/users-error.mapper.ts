@@ -8,6 +8,8 @@ export const UsersErrorMapper = {
     return match(error.type)
       .with('FORBIDDEN', 'PERMISSION_DENIED', 'FORBIDDEN_RESOURCE_ACTION', 'ACCESS_SCOPE_DENIED',
         () => ({ type: 'about:blank', title: 'Forbidden', status: 403, code: 'FORBIDDEN' }))
+      .with('CONFLICT', 'PROTECTED_ROLE',
+        () => ({ type: 'about:blank', title: 'Conflict', status: 409, code: 'CONFLICT' }))
       .with('NOT_FOUND',
         () => ({ type: 'about:blank', title: 'Not Found', status: 404, code: 'NOT_FOUND' }))
       .exhaustive();

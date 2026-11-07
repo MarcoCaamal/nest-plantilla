@@ -9,7 +9,7 @@ if (!databaseUrl) throw new Error('DATABASE_URL is required');
 const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: databaseUrl }) });
 
 async function main(): Promise<void> {
-  const permissions = ['users:read', 'users:write', 'api-clients:write'];
+  const permissions = ['users:read', 'users:write', 'roles:read', 'roles:write', 'permissions:read', 'api-clients:write'];
   const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
   const adminPassword = process.env.ADMIN_PASSWORD;
   if (!adminEmail || !adminPassword || adminPassword.length < 12) {

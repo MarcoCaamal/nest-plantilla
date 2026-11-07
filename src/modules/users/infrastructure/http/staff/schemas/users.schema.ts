@@ -10,8 +10,11 @@ export const CreateRoleDto = createZodDto(z.object({
   name: z.string().min(2).max(100),
   description: z.string().max(500).optional(),
 }));
-export const CreatePermissionDto = createZodDto(z.object({
-  key: z.string().regex(/^[a-z][a-z0-9:_-]+:[a-z][a-z0-9:_-]+$/),
+export const UpdateRoleDto = createZodDto(z.strictObject({
+  name: z.string().min(2).max(100).optional(),
+  description: z.string().max(500).nullable().optional(),
+}).refine((value) => value.name !== undefined || value.description !== undefined, {
+  message: 'At least one editable property is required',
 }));
 export const AssignRoleDto = createZodDto(z.object({ roleKey: z.string().min(2).max(100) }));
 export const GrantPermissionDto = createZodDto(z.object({ permissionKey: z.string().min(2).max(100) }));

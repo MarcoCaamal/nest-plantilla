@@ -30,7 +30,7 @@ pnpm start
 | Mailpit SMTP | localhost:1027 |
 | OpenObserve | http://localhost:5080 |
 
-Change the local-only values in .env.example before any shared or production deployment. The seed requires ADMIN_EMAIL and ADMIN_PASSWORD (at least twelve characters); it creates the admin role, users:read, users:write, api-clients:write permissions, and admin account idempotently without resetting existing credentials.
+Change the local-only values in .env.example before any shared or production deployment. The seed requires ADMIN_EMAIL and ADMIN_PASSWORD (at least twelve characters); it creates the generic `User` administrator, assigns the built-in `admin` role and provisions `users:read`, `users:write`, `roles:read`, `roles:write`, `permissions:read`, `api-clients:write` permissions idempotently, without resetting existing credentials. Rerun `pnpm db:seed` after upgrading an existing installation to provision the additional permission keys.
 
 Environment is validated with Zod 4 **before** Nest initialization. Invalid variables abort startup and structured errors include field names, not secret values. Required: DATABASE_URL, JWT_ACCESS_SECRET (32+ characters), MAIL_FROM; RESEND_API_KEY is mandatory in production. The JWT durations default to 900 seconds and 30 days for refresh. CORS_ORIGINS takes comma-separated HTTP(S) origins.
 
@@ -68,7 +68,28 @@ Domain and application code do not import Nest, Prisma, Zod, JWT, Argon2, Pino, 
 
 The JWT adapter requires HS256 signature, issuer, audience, expiration and valid session ID. Permissions/roles come from the current database record, never unsigned client claims. Substitute an EdDSA/RS256 adapter if asymmetric trust is necessary.
 
-Staff: GET /staff/users, POST /staff/users/:id/roles, GET and POST /staff/roles, POST /staff/roles/:key/permissions, POST /staff/permissions. Requests require users:read or users:write as appropriate.
+### Users, roles and immutable permissions
+
+There is **only one generic `User` model**. There is no StaffUser entity, discriminator or separate staff account type. `admin` is a normal role assigned to a normal User through `UserRole`; the `/staff/*` prefix is an HTTP **audience**, not a type of user. Authorization checks the user's live role-permission assignments in PostgreSQL on each authenticated request, so modifications take effect without issuing a new JWT.
+
+**Permission keys are a code/seed-managed catalog. The HTTP API is strictly read-only for permissions**: there are no `POST`, `PATCH`, `PUT` or `DELETE` routes under `/staff/permissions`. New capabilities are added to the seed and permissions are assigned/revoked **on roles**, not created dynamically over HTTP.
+
+| Method | Route | Required permission | Purpose |
+| --- | --- | --- | --- |
+| GET | `/staff/permissions` | `permissions:read` | List the permission catalog (sorted by key) |
+| GET | `/staff/permissions/:key` | `permissions:read` | Read an existing permission |
+| GET | `/staff/roles` | `roles:read` | List roles with their permission keys |
+| GET | `/staff/roles/:key` | `roles:read` | Get role by stable key |
+| POST | `/staff/roles` | `roles:write` | Create a role (`key`, `name`, optional `description`) |
+| PATCH | `/staff/roles/:key` | `roles:write` | Edit role name/description (key is immutable) |
+| DELETE | `/staff/roles/:key` | `roles:write` | Delete role; cascades memberships and grants |
+| POST | `/staff/roles/:key/permissions` | `roles:write` | Grant a catalog permission with `{ "permissionKey": "users:read" }` |
+| DELETE | `/staff/roles/:key/permissions/:permissionKey` | `roles:write` | Revoke permission from a role |
+| GET | `/staff/users` | `users:read` | Paginated generic users, including roles/permissions |
+| POST | `/staff/users/:id/roles` | `users:write` | Assign role to generic user with `{ "roleKey": "admin" }` |
+| DELETE | `/staff/users/:id/roles/:roleKey` | `users:write` | Revoke a user's role |
+
+Role creation conflicts return 409. Missing roles/permissions return 404; unauthorized access returns 401/403. The built-in `admin` role cannot be deleted or have permissions revoked via the API. Removing the final user assigned `admin` is rejected with 409 (and serialized with a database row lock). Role assignment and permission grants are idempotent. The seed remains the recovery path for provisioning administrator capabilities.
 
 M2M: POST /staff/api-clients provisions an API key (the raw key is shown **once**, only in the HTTP response). GET /partner-b2b/whoami requires X-API-Key and returns an authenticated MachinePrincipal. Bearer and X-API-Key are not mixed.
 
