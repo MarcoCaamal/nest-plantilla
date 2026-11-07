@@ -24,11 +24,11 @@ Desarrollo: `pnpm dev`. Config opcional: `PORT=3000`.
 
 ## Qué hay y qué no
 
-Hay `Result<T,E>`, `Principal`, `ResourcePolicy`, `AccessScope`, `UnitOfWorkPort`, `HttpResult`, RFC 9457, `GateGuard`, helper Zod 4/Standard Schema, Swagger y reglas de arquitectura.
+Hay `Result<T,E>`, `Principal`, `ResourcePolicy`, `AccessScope`, `UnitOfWorkPort`, `HttpResult`, RFC 9457, `GateGuard`, autenticación de usuarios y M2M agnóstica mediante puertos/guards, helper Zod 4/Standard Schema, Swagger y reglas de arquitectura.
 
-**No hay** ORM, conexión a base de datos, hashes de contraseña, API keys, JWT, Redis, colas, webhook dispatcher ni módulos de negocio falsos. Se añaden puertos cuando exista una necesidad de dominio y adaptadores cuando se elija una tecnología. El health endpoint únicamente verifica que el proceso está vivo.
+**No hay** ORM, conexión a base de datos, hashes de contraseña, gestión real de API keys, emisión/verificación JWT, Redis, colas, webhook dispatcher ni módulos de negocio falsos. Se añaden puertos cuando exista una necesidad de dominio y adaptadores cuando se elija una tecnología. El health endpoint únicamente verifica que el proceso está vivo.
 
-Lee [AGENTS.md](AGENTS.md) y [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) antes de implementar funciones.
+Lee [AGENTS.md](AGENTS.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) y [docs/AUTHENTICATION.md](docs/AUTHENTICATION.md) antes de implementar funciones.
 
 **Package manager: pnpm exclusivamente.**
 

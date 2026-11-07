@@ -8,7 +8,7 @@ import { GateGuard } from '@/shared/infrastructure/http/guards/gate.guard';
 
 const actor: Principal = {
   id: 'actor-1',
-  type: 'HUMAN',
+  type: 'USER',
   roles: ['owner'],
   permissions: ['projects.read'],
   attributes: {},

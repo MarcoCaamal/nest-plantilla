@@ -32,7 +32,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       );
     }
 
-    const problem: ProblemDetails = {
+    const problem: ProblemDetails = getExplicitProblem(exception, status) ?? {
       type: 'about:blank',
       title: status === 500 ? 'Internal Server Error' : errorTitle(status),
       status,
@@ -65,4 +65,24 @@ function safeHttpDetail(exception: unknown): string {
     if (Array.isArray(message)) return message.filter((item): item is string => typeof item === 'string').join('; ');
   }
   return exception.message;
+}
+
+
+/** Preserve deliberately mapped Problem Details from protocol adapters (e.g. 401 guards). */
+function getExplicitProblem(exception: unknown, status: number): ProblemDetails | undefined {
+  if (!(exception instanceof HttpException)) return undefined;
+  const body: unknown = exception.getResponse();
+  if (typeof body !== 'object' || body === null) return undefined;
+  if (!('type' in body) || typeof body.type !== 'string' ||
+      !('title' in body) || typeof body.title !== 'string' ||
+      !('status' in body) || body.status !== status) return undefined;
+  const detail = 'detail' in body && typeof body.detail === 'string' ? body.detail : undefined;
+  const code = 'code' in body && typeof body.code === 'string' ? body.code : undefined;
+  return {
+    type: body.type,
+    title: body.title,
+    status,
+    ...(detail === undefined ? {} : { detail }),
+    ...(code === undefined ? {} : { code }),
+  };
 }

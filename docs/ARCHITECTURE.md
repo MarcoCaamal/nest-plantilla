@@ -73,6 +73,10 @@ create(@Body({ schema: CreateOrderDto.schema }) dto: CreateOrderDto) {
 ```
 El pipe global valida entrada; `@nestjs/swagger` usa `~standard.jsonSchema` de Zod 4.2+. No llevar DTOs de Zod al caso de uso.
 
+## Autenticación (AuthN)
+
+`modules/auth` posee la identidad de usuarios y `modules/api-clients` posee la autenticación Machine-to-Machine. Los puertos son agnósticos y cada módulo se registra solo al aportar explícitamente un verificador de infraestructura. No se autoconfigura JWT, sesiones ni API Keys. Los guards producen un `Principal` confiable y siempre se ejecutan antes de Gates. Ver [AUTHENTICATION.md](AUTHENTICATION.md).
+
 ## Autorización por niveles
 
 1. `@Authorize(permission, predicate)` + `GateGuard` comprueba permiso antes del Use Case. **Requiere** un guard de autenticación real por audiencia que asigne `request.principal`; no viene instalado.

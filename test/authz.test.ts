@@ -12,7 +12,7 @@ import { HttpResult } from '@/shared/infrastructure/http/http-result';
 
 const actor: Principal = {
   id: 'actor-1',
-  type: 'HUMAN',
+  type: 'USER',
   roles: ['admin'],
   permissions: ['projects.read', 'projects.update'],
   attributes: { organizationId: 'acme' },
