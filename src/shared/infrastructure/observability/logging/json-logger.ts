@@ -12,15 +12,6 @@ const rank: Record<Severity, number> = {
   error: 40,
 };
 
-function logLevel(raw: string | undefined): LogLevel {
-  switch (raw?.toLowerCase()) {
-    case 'debug': return 'debug';
-    case 'warn': return 'warn';
-    case 'error': return 'error';
-    case 'silent': return 'silent';
-    default: return 'info';
-  }
-}
 
 export interface JsonLoggerOptions {
   readonly level?: LogLevel;
@@ -79,14 +70,20 @@ function defaultWrite(line: string, severity: Severity): void {
  * Callers should log named fields, not arbitrary request bodies or token strings.
  */
 export class JsonLogger implements LoggerService {
-  private readonly level: LogLevel;
-  private readonly service: string;
+  private level: LogLevel;
+  private service: string;
   private readonly writer: LogWriter;
 
   constructor(options: JsonLoggerOptions = {}) {
-    this.level = options.level ?? logLevel(process.env.LOG_LEVEL);
-    this.service = options.service ?? process.env.SERVICE_NAME ?? 'nest-plantilla';
+    this.level = options.level ?? 'info';
+    this.service = options.service ?? 'nest-plantilla';
     this.writer = options.writer ?? defaultWrite;
+  }
+
+  /** Called exactly once from the validated bootstrap, before Nest starts. */
+  configure(config: { readonly level: LogLevel; readonly service: string }): void {
+    this.level = config.level;
+    this.service = config.service;
   }
 
   log(message: unknown, ...optionalParams: unknown[]): void {
