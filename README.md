@@ -82,6 +82,10 @@ Tipos agnósticos `PageQuery`, `CursorQuery` y `Paginated<T>`; schemas HTTP Zod 
 
 El entorno se valida con Zod antes de crear la aplicación; `AppConfig` se inyecta como objeto inmutable. `PORT`, `NODE_ENV`, `LOG_LEVEL` y `SERVICE_NAME` tienen defaults y reglas estrictas. Se habilitan los shutdown hooks y se oculta `X-Powered-By`. `ClockPort` e `IdGeneratorPort` incluyen adaptadores opcionales sin proveedores de terceros. Detalles en [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
 
+## Eventos de dominio (contratos)
+
+`DomainEvent` + `DomainEventBuffer` para capturar hechos por agregado, con puertos opcionales `TransactionalEventOutboxPort` y `DomainEventPublisherPort`. Sin bus global, DB ni publicador `NoOp`. Ver [docs/DOMAIN_EVENTS.md](docs/DOMAIN_EVENTS.md).
+
 ## Readiness opcional
 
 `/health` es liveness. `/health/ready` solo se habilita al registrar `ReadinessModule` con checks reales y timeout; devuelve 503 RFC 9457 ante fallos, timeouts o shutdown. No se instalan dependencias externas ni checks ficticios. Ver [docs/READINESS.md](docs/READINESS.md).

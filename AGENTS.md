@@ -16,6 +16,12 @@ Este repositorio es una plantilla **agnóstica a proveedores** de NestJS 12+, Ty
 - El interceptor HTTP traduce el envelope. Controladores no lanzan `HttpException`.
 - `UnitOfWorkPort`: `Result.ok` = commit + afterCommit; `Result.err` = rollback y mismo err; excepciones técnicas = rollback y excepción original. Hooks después de commit no garantizan entrega: usar outbox opcional al necesitarlos.
 
+## Eventos de dominio
+- `DomainEvent` identifica un hecho inmutable, y `DomainEventBuffer` permite recolección por composición sin suscriptores implícitos.
+- `TransactionalEventOutboxPort.append()` solo debe implementarse junto con un `UnitOfWorkPort` que comparta la transacción; guardar evento y agregado es atómico o no se usa ese puerto.
+- `DomainEventPublisherPort` es transporte fuera de la transacción. No registrar publicadores `NoOp` ni hacer pasar `afterCommit` por entrega garantizada.
+- Solo reconocer/limpiar eventos pendientes después de commit exitoso. En rollback, descartar/recargar el agregado antes de reusarlo.
+
 ## Reglas de modelado
 - Puertos son `abstract class` con DI nativa, no Symbol + interface redundantes.
 - Repositorios reciben/devuelven agregados; mappers estáticos entre dominio y ORM.
