@@ -24,6 +24,12 @@ Este repositorio es una plantilla **agnóstica a proveedores** de NestJS 12+, Ty
 - AuthN: guard de usuario Bearer y guard M2M API Key, en módulos separados. Ambos verifican por puertos y producen Principal inmutable; usar guard AuthN ANTES de GateGuard. Sin adaptadores preinstalados.
 - AuthZ: Principal inmutable; Gates HTTP; ResourcePolicy en dominio; listados restringidos por AccessScope + filtros AND (anti-IDOR).
 
+## Observabilidad transversal
+- Logger JSON a stdout/stderr con niveles configurables, Request-ID validado y AsyncLocalStorage en infraestructura.
+- Un log de acceso por petición HTTP, incluidas respuestas de guards, errores 500 y abortos; no instrumentar con interceptores de controlador únicamente.
+- No registrar headers, bodies, tokens ni credenciales; logs de fallos técnicos con stack interno y respuestas RFC 9457 sanitizadas.
+- OpenTelemetry, exportadores, storage y auditoría persistente son adaptadores o módulos opcionales. No introducirlos por defecto.
+
 ## Validación y adaptadores
 - Zod 4 + Standard Schema nativo de Nest 12; schema en `infrastructure/http/<audiencia>/schemas`; nunca Zod en domain/application.
 - Usar `.meta()` y `createZodDto`, `@Body({schema})`, `StandardSchemaValidationPipe`. Los HttpMappers convierten DTOs a inputs planos.

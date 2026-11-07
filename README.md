@@ -28,7 +28,7 @@ Hay `Result<T,E>`, `Principal`, `ResourcePolicy`, `AccessScope`, `UnitOfWorkPort
 
 **No hay** ORM, conexión a base de datos, hashes de contraseña, gestión real de API keys, emisión/verificación JWT, Redis, colas, webhook dispatcher ni módulos de negocio falsos. Se añaden puertos cuando exista una necesidad de dominio y adaptadores cuando se elija una tecnología. El health endpoint únicamente verifica que el proceso está vivo.
 
-Lee [AGENTS.md](AGENTS.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) y [docs/AUTHENTICATION.md](docs/AUTHENTICATION.md) antes de implementar funciones.
+Lee [AGENTS.md](AGENTS.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/AUTHENTICATION.md](docs/AUTHENTICATION.md) y [docs/OBSERVABILITY.md](docs/OBSERVABILITY.md) antes de implementar funciones.
 
 **Package manager: pnpm exclusivamente.**
 
@@ -69,3 +69,7 @@ restricciones. En listados, el adapter de repositorio debe aplicar `AccessScope`
 mediante un `AND` con filtros externos (nunca `OR` ni reemplazo de filtros).
 No se incluye autenticación ni mecanismos para calcular o persistir permisos;
 el adaptador de authn proporcionará un `Principal` confiable.
+
+## Observabilidad integrada
+
+Logs JSON (stdout/stderr), contexto de petición vía AsyncLocalStorage, `X-Request-ID` seguro y logs HTTP de finalización, incluidos 401/403/500 y conexiones abortadas. Configura `LOG_LEVEL=debug|info|warn|error|silent` y `SERVICE_NAME` si lo necesitas. No hay SDK ni servicio externo instalado. Ver [docs/OBSERVABILITY.md](docs/OBSERVABILITY.md).

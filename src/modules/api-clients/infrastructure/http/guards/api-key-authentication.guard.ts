@@ -1,5 +1,6 @@
 import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import { AuthenticationHttpException } from '@/shared/infrastructure/http/authentication-http.exception';
+import { requestContext } from '@/shared/infrastructure/observability/context/request-context';
 import {
   readApiKeyCredential,
   type AuthenticatedHttpRequest,
@@ -21,6 +22,7 @@ export class ApiKeyAuthenticationGuard implements CanActivate {
     if (!result.ok) throw new AuthenticationHttpException(result.error);
 
     request.principal = result.value;
+    requestContext.setActor(result.value);
     return true;
   }
 }
