@@ -130,3 +130,7 @@ ni políticas de negocio genéricas para recursos inexistentes.
 ## Observabilidad
 
 `shared/infrastructure/observability/` ofrece logger JSON de Nest, correlación por AsyncLocalStorage y un middleware de logging HTTP registrado por `ObservabilityModule`. No agrega infraestructura externa, SDKs ni dependencias en dominio/aplicación. Ver [OBSERVABILITY.md](OBSERVABILITY.md).
+
+## Paginación y listados seguros
+
+`shared/core/pagination.ts` modela page/cursor sin ORM; `shared/domain/auth/scoped-list-query.ts` exige la presencia de un AccessScope. Los schemas HTTP Zod 4 coercionan y limitan parámetros (limit máximo 100). El repositorio de cada feature implementa AND entre scope y filtros del cliente. Ver [PAGINATION.md](PAGINATION.md).
