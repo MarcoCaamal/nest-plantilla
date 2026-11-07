@@ -1,0 +1,88 @@
+# Arquitectura de Nest Plantilla
+
+## Capas
+
+```text
+src/
+├── app.module.ts              # composición de infraestructura
+├── main.ts                    # bootstrap HTTP
+├── shared/
+│   ├── core/                  # Result<T,E>, utilidades absolutamente puras
+│   ├── domain/auth/           # Principal, ResourcePolicy, AccessScope
+│   ├── application/ports/     # UnitOfWorkPort
+│   └── infrastructure/http/   # HttpResult, interceptors, filters, gates, swagger
+└── modules/
+    └── <feature>/
+        ├── public.ts
+        ├── <feature>.module.ts
+        ├── domain/{entities,value-objects,policies,ports,errors}
+        ├── application/{use-cases,services,ports}
+        └── infrastructure/
+            ├── http/{client,staff,partner-b2b,mappers}
+            ├── persistence/{models,mappers}
+            ├── adapters/
+            └── webhooks/
+```
+
+No se crea ningún módulo de negocio hasta conocer sus requisitos. Los directorios del árbol de ejemplo se materializan solo si son necesarios.
+
+## Contratos agnósticos
+
+Puertos con `abstract class`, implementados y conectados mediante providers:
+```typescript
+@Module({
+  providers: [
+    { provide: UserRepositoryPort, useClass: PrismaUserRepository },
+    { provide: PasswordHasherPort, useClass: Argon2PasswordHasherAdapter },
+    {
+      provide: CreateUserUseCase,
+      useFactory: (users: UserRepositoryPort, passwords: PasswordHasherPort) =>
+        new CreateUserUseCase(users, passwords),
+      inject: [UserRepositoryPort, PasswordHasherPort],
+    },
+  ],
+})
+export class UsersModule {}
+```
+Este ejemplo **no es parte de la plantilla**: no existe ningún adapter ni puerto User todavía. Prisma/Sequelize y Argon2/bcrypt solo se instalan cuando se eligen para un proyecto concreto.
+
+## Contrato UnitOfWork
+
+- Si el callback devuelve `Result.ok`: COMMIT; al confirmarse, ejecutar hooks afterCommit; retornar ok original.
+- Si devuelve `Result.err`: ROLLBACK explícito; descartar hooks; retornar exactamente el mismo err.
+- Si se produce excepción técnica: ROLLBACK si es posible y **propagar la excepción original**. No contaminar errores tipados con DATABASE_CRASH.
+- Al fallar afterCommit ya no se puede deshacer commit. Para entrega fiable, implementar Transactional Outbox en el proyecto.
+- ALS/CLS es un detalle del adaptador; no se instala ni se presupone ORM alguno.
+
+## Validación Zod y OpenAPI
+
+NestJS 12 tiene integración Standard Schema nativa. Usar:
+```typescript
+// infrastructure/http/staff/schemas/create-order.schema.ts
+export const CreateOrderDto = createZodDto(
+  z.object({ code: z.string().min(1).meta({ description: 'Order code' }) }),
+);
+export type CreateOrderDto = ZodDtoOutput<typeof CreateOrderDto>;
+
+// infrastructure/http/staff/staff-orders.controller.ts
+@Post()
+create(@Body({ schema: CreateOrderDto.schema }) dto: CreateOrderDto) {
+  const input = OrderHttpMapper.toCreateInput(dto);
+  return this.useCase.execute(input).then((r) => HttpResult.from(r, OrderErrorMapper.toProblemDetails, 201));
+}
+```
+El pipe global valida entrada; `@nestjs/swagger` usa `~standard.jsonSchema` de Zod 4.2+. No llevar DTOs de Zod al caso de uso.
+
+## Autorización por niveles
+
+1. `@Authorize(permission, predicate)` + `GateGuard` comprueba permiso antes del Use Case. **Requiere** un guard de autenticación real por audiencia que asigne `request.principal`; no viene instalado.
+2. `ResourcePolicy.authorize(actor, action, entity)` decide una acción usando una entidad cargada.
+3. `ResourcePolicy.resolveScope(actor)` retorna `Result<AccessScope<Constraints>, AuthorizationError>`; el adapter de repositorio realiza intersección de filtros del usuario y Scope bajo AND lógico, nunca OR ni reemplazo permisivo.
+
+## HTTP
+
+Casos de uso retornan `Result`. Controladores devuelven `HttpResult.from(...)`; el interceptor global expone éxito o RFC 9457. El filtro global trata fallos no controlados, incluyendo fallos del framework, sin filtrar stack al cliente.
+
+## Regla anti-boilerplate
+
+Nada de `DomainService` para un único agregado, `ApplicationService` para un solo caso de uso, `RepositoryPort` sin persistencia requerida ni adapters vacíos. Validación HTTP, proveedores y servicios concretos residen en infraestructura.
