@@ -74,6 +74,10 @@ el adaptador de authn proporcionará un `Principal` confiable.
 
 Logs JSON (stdout/stderr), contexto de petición vía AsyncLocalStorage, `X-Request-ID` seguro y logs HTTP de finalización, incluidos 401/403/500 y conexiones abortadas. Configura `LOG_LEVEL=debug|info|warn|error|silent` y `SERVICE_NAME` si lo necesitas. No hay SDK ni servicio externo instalado. Ver [docs/OBSERVABILITY.md](docs/OBSERVABILITY.md).
 
+## Listados y paginación seguros
+
+Tipos agnósticos `PageQuery`, `CursorQuery` y `Paginated<T>`; schemas HTTP Zod 4 con `limit` predeterminado 20 y máximo 100. `ScopedListQuery` exige `AccessScope` y filtros en los puertos de listado; el adaptador concreto debe combinarlos mediante AND. Ver [docs/PAGINATION.md](docs/PAGINATION.md).
+
 ## Configuración validada y bootstrap
 
 El entorno se valida con Zod antes de crear la aplicación; `AppConfig` se inyecta como objeto inmutable. `PORT`, `NODE_ENV`, `LOG_LEVEL` y `SERVICE_NAME` tienen defaults y reglas estrictas. Se habilitan los shutdown hooks y se oculta `X-Powered-By`. `ClockPort` e `IdGeneratorPort` incluyen adaptadores opcionales sin proveedores de terceros. Detalles en [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
