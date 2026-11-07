@@ -31,3 +31,41 @@ Hay `Result<T,E>`, `Principal`, `ResourcePolicy`, `AccessScope`, `UnitOfWorkPort
 Lee [AGENTS.md](AGENTS.md) y [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) antes de implementar funciones.
 
 **Package manager: pnpm exclusivamente.**
+
+## Módulo inicial de autorización (authz)
+
+`src/modules/authz` expone tres casos de uso agnósticos desde `public.ts`:
+`AuthorizeActionUseCase` (permiso), `AuthorizeResourceUseCase` (permiso + política de entidad)
+y `ResolveAccessScopeUseCase` (permiso + alcance de lectura). Todos devuelven `Result`,
+sin I/O, sin `@Injectable()` en aplicación y sin ORM/JWT/Redis.
+
+`AuthzModule` registra los casos de uso con factory providers y exporta `GateGuard`.
+`@Authorize('projects.read')` define el permiso; el guard se activa explícitamente
+**después de un guard de autenticación real**, que debe asignar `request.principal`:
+
+```ts
+// Ejemplo para un controlador futuro, no viene instalado ClientAuthGuard.
+@UseGuards(ClientAuthGuard, GateGuard)
+@Controller('projects')
+export class ProjectsController {
+  @Get()
+  @Authorize('projects.read')
+  list(@CurrentPrincipal() principal: Principal) {
+    // El caso de uso resuelve AccessScope y el repositorio lo combina con AND.
+  }
+}
+```
+
+Se evita instalar `GateGuard` como `APP_GUARD`: Nest ejecuta los guards globales
+antes que los guards de autenticación de cada controlador. Sin principal, una
+ruta protegida responde **401**; sin permiso o al fallar un predicado, **403**.
+Las excepciones técnicas del guard se traducen a RFC 9457 por el filtro global.
+Los casos de uso devuelven `Result.err`, que puede mapearse con
+`HttpResult.from(result, AuthzErrorMapper.toProblemDetails)`.
+
+**Reglas de seguridad:** los permisos se comparan exactamente, ningún rol concede
+permisos de forma implícita; una política denegada nunca se convierte en acceso sin
+restricciones. En listados, el adapter de repositorio debe aplicar `AccessScope`
+mediante un `AND` con filtros externos (nunca `OR` ni reemplazo de filtros).
+No se incluye autenticación ni mecanismos para calcular o persistir permisos;
+el adaptador de authn proporcionará un `Principal` confiable.

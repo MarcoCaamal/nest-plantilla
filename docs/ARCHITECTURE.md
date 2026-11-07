@@ -86,3 +86,39 @@ Casos de uso retornan `Result`. Controladores devuelven `HttpResult.from(...)`; 
 ## Regla anti-boilerplate
 
 Nada de `DomainService` para un único agregado, `ApplicationService` para un solo caso de uso, `RepositoryPort` sin persistencia requerida ni adapters vacíos. Validación HTTP, proveedores y servicios concretos residen en infraestructura.
+
+## Módulo inicial authz
+
+`src/modules/authz/public.ts` es la interfaz pública del módulo.
+
+- **shared/domain/auth:** contrato `Principal`, `AuthorizationError`, `AccessScope`,
+  `ResourcePolicy` y `PermissionPolicy.require` (puro, comparación exacta).
+- **modules/authz/application:** `AuthorizeActionUseCase` verifica permiso;
+  `AuthorizeResourceUseCase` aplica después `ResourcePolicy.authorize`;
+  `ResolveAccessScopeUseCase` consulta `ResourcePolicy.resolveScope` solo tras verificar
+  permiso. No hay excepciones de negocio, I/O, ni decoradores Nest en aplicación.
+- **modules/authz/infrastructure/http:** `AuthzErrorMapper` convierte todos los
+  errores tipados de autorización a HTTP 403 RFC 9457 con `ts-pattern.exhaustive()`.
+- **modules/authz/authz.module.ts:** exporta use cases (factory providers) y
+  `GateGuard`. Está importado por `AppModule`.
+
+El `GateGuard` no se registra globalmente como `APP_GUARD`: eso lo ejecutaría
+antes de los guards de autenticación configurados por audiencia. En controladores
+futuros, configurar `@UseGuards(AudienceAuthGuard, GateGuard)` junto con
+`@Authorize('resource.action')`. Authn carga y valida el principal en
+`request.principal`; authz nunca autentica ni interpreta tokens. Un principal
+ausente responde 401 y un permiso/predicado denegado provoca 403, ambos manejados
+por el filtro global. Las rutas no anotadas permanecen públicas si no están
+protegidas por un guard de authn.
+
+**Advertencia anti-IDOR:** `AccessScope.unrestricted()` solo debe provenir de
+una política que lo autorice explícitamente; `AccessScope.constrained({ ... })`
+no es una autorización para ignorar filtros. La implementación de repositorios
+debe intersectar condiciones de actor, tenant y filtros de usuario con `AND`.
+Para leer una entidad, el caso de uso primero carga la entidad con una consulta
+restringida, luego ejecuta `AuthorizeResourceUseCase` sobre ella. Nunca consultar
+una entidad de otro tenant sin autorización.
+
+**Sin proveedores instalados:** no hay roles predefinidos, acceso por wildcard,
+`JwtService`, servicios de permisos externos, base de datos, usuarios simulados
+ni políticas de negocio genéricas para recursos inexistentes.
